@@ -1,0 +1,62 @@
+﻿@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Settings";
+}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm secure-card-main">
+                <div class="card-body">
+                    <h2 class="card-title" style="color: #ffffff !important; font-weight: bold;">Admin Settings</h2>
+                    <p class="text-white">Configure file limits and AWS settings.</p>
+                    <form asp-action="UpdateSettings" method="post">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label text-white" style="font-weight: bold;">Max File Size (MB)</label>
+                                    <input type="number" class="form-control bg-dark text-white" name="maxFileSize" value="50" required min="1" max="100" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-white" style="font-weight: bold;">Allowed File Types (comma-separated)</label>
+                                    <input type="text" class="form-control bg-dark text-white" name="allowedTypes" value="PDF,DOCX,PNG,JPG" required />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label text-white" style="font-weight: bold;">Files Bucket</label>
+                                    <input type="text" class="form-control bg-dark text-white" value="secure-file-upload-portal" readonly />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-white" style="font-weight: bold;">Audit Bucket</label>
+                                    <input type="text" class="form-control bg-dark text-white" value="trail-bucket2025" readonly />
+                                </div>
+                                <p class="text-white">Multi-bucket design for separation of concerns: Files in main bucket, audits in CloudTrail bucket.</p>
+                                <div class="mb-3">
+                                    <label class="form-label text-white" style="font-weight: bold;">Enable MFA (Google Authenticator)</label>
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="mfaToggle" />
+                                        <label class="form-check-label text-white" for="mfaToggle">MFA Enabled</label>
+                                    </div>
+                                    <small class="text-white">Scan QR code with Google Authenticator for 2FA.</small>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <a href="/Admin/Index" class="btn btn-outline-secondary ms-2">Back to Dashboard</a>
+                    </form>
+                    <div class="mt-4">
+                        <small class="text-white">Changes saved to session (mock). Persist to config in production.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('mfaToggle').addEventListener('change', function() {
+        localStorage.setItem('MFAEnabled', this.checked);
+        alert('MFA ' + (this.checked ? 'enabled' : 'disabled') + ' (simulated)');
+    });
+    if (localStorage.getItem('MFAEnabled') === 'true') document.getElementById('mfaToggle').checked = true;
+</script>

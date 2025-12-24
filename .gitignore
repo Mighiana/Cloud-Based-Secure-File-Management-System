@@ -1,0 +1,7 @@
+﻿# Ignore build output
+/bin
+/obj
+/.vs
+
+# Ignore sensitive files
+appsettings.json

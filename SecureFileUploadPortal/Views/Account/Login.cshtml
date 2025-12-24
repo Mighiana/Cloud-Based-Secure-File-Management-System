@@ -1,0 +1,40 @@
+﻿@model List<string>
+@{
+    ViewData["Title"] = "CloudTrail Logs";
+    Layout = "_AdminLayout";
+}
+
+<h2>CloudTrail Logs</h2>
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+@if (Model != null && Model.Count > 0)
+{
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Log Key</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var log in Model)
+            {
+                <tr>
+                    <td>@log</td>
+                    <td>
+                        <a asp-action="ViewLog" asp-route-key="@log" class="btn btn-sm btn-primary">View</a>
+                        <a href="https://@log" target="_blank" class="btn btn-sm btn-success">Download</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else
+{
+    <p>No CloudTrail logs found.</p>
+}

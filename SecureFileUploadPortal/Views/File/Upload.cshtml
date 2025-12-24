@@ -1,0 +1,36 @@
+﻿@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Upload File";
+}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm secure-card-main">
+                <div class="card-body">
+                    <h2 class="card-title">Upload File</h2>
+                    @if (TempData["Success"] != null)
+                    {
+                        <div class="alert alert-success">@TempData["Success"]</div>
+                    }
+                    @if (TempData["ScanResult"] != null)
+                    {
+                        <div class="alert alert-success">@TempData["ScanResult"]</div>
+                    }
+                    @if (TempData["Error"] != null)
+                    {
+                        <div class="alert alert-danger">@TempData["Error"]</div>
+                    }
+                    <div class="card p-4">
+                        <form asp-action="Upload" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Select file to upload:</label>
+                                <input type="file" class="form-control" name="file" id="file" required />
+                            </div>
+                            <button type="submit" class="btn btn-primary">Upload</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

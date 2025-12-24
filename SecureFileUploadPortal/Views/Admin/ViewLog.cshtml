@@ -1,0 +1,36 @@
+﻿@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "View Log";
+}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm secure-card-main">
+                <div class="card-body">
+                    <h2 class="card-title">Log Details</h2>
+                    @if (TempData["Error"] != null)
+                    {
+                        <div class="alert alert-danger">@TempData["Error"]</div>
+                    }
+                    <p><strong>Log Key:</strong> @ViewData["LogKey"]</p>
+                    <pre class="bg-light p-3 rounded" style="white-space: pre-wrap; font-size: 0.9em; max-height: 600px; overflow-y: auto;">
+@ViewData["LogContent"]
+                    </pre>
+                    <a href="/Admin/Logs" class="btn btn-outline-secondary mt-3">Back to Logs</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .secure-card-main {
+        background: linear-gradient(135deg, #ecf0f1, #bdc3c7);
+        border: 1px solid rgba(189, 195, 199, 0.5);
+        color: #2c3e50;
+    }
+
+        .secure-card-main .card-title {
+            color: #2c3e50;
+        }
+</style>
