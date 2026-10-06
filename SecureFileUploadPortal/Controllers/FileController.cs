@@ -1,102 +1,139 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using SecureFileUploadPortal.Data;
+using SecureFileUploadPortal.Models;
+using SecureFileUploadPortal.Options;
+using SecureFileUploadPortal.Security;
 using SecureFileUploadPortal.Services;
-using System;
-using System.IO;
-using System.Threading.Tasks;
 
-namespace SecureFileUploadPortal.Controllers
+namespace SecureFileUploadPortal.Controllers;
+
+public class FileController(
+    AppDbContext db,
+    IFileStorageService storage,
+    UploadValidator validator,
+    AuditService audit,
+    IOptions<UploadOptions> uploadOptions,
+    ILogger<FileController> logger) : Controller
 {
-    public class FileController : Controller
+    private static readonly FileExtensionContentTypeProvider ContentTypes = new();
+
+    [HttpGet]
+    public IActionResult Upload() => View(new UploadViewModel
     {
-        private readonly S3Service _s3Service;
-        private readonly ILogger<FileController> _logger;
+        MaxFileSizeMB = uploadOptions.Value.MaxFileSizeMB,
+        AllowedExtensions = uploadOptions.Value.EffectiveExtensions,
+    });
 
-        public FileController(S3Service s3Service, ILogger<FileController> logger)
+    [HttpPost]
+    public async Task<IActionResult> Upload(IFormFile? file, CancellationToken ct)
+    {
+        var fileName = Path.GetFileName(file?.FileName ?? string.Empty);
+        if (validator.Validate(fileName, file?.Length ?? 0) is { } error)
         {
-            _s3Service = s3Service;
-            _logger = logger;
+            await audit.LogAsync(AuditActions.FileUploadRejected, false, target: fileName, details: error, ct: ct);
+            TempData["Error"] = error;
+            return RedirectToAction(nameof(Upload));
         }
 
-        // Upload form
-        public IActionResult Upload()
+        string? key = null;
+        try
         {
-            return View();
-        }
+            // The client-supplied Content-Type is not trusted; it is derived from the (already allow-listed) extension.
+            var contentType = ContentTypes.TryGetContentType(fileName, out var mapped) ? mapped : "application/octet-stream";
+            await using var stream = file!.OpenReadStream();
+            key = await storage.UploadAsync(stream, fileName, contentType, ct);
 
-        [HttpPost]
-        public async Task<IActionResult> Upload(IFormFile file)
-        {
-            if (file == null || file.Length == 0)
+            var record = new FileRecord
             {
-                TempData["Error"] = "Please select a file.";
-                return View();
-            }
-            try
-            {
-                await _s3Service.UploadFileAsync(file);
-                // Simulate AI scan
-                await Task.Delay(2000); // 2s "scan"
-                TempData["ScanResult"] = "No sensitive data found (Macie scan passed ✅)";
-                _s3Service.AddAlert($"AI scan on '{file.FileName}': Clean");
-                TempData["Success"] = "File uploaded successfully!";
-                // Add alert for admin
-                _s3Service.AddAlert($"File '{file.FileName}' uploaded by user at {DateTime.Now}");
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = $"Upload failed: {ex.Message}";
-                _s3Service.AddAlert($"Failed upload attempt: '{file.FileName}' at {DateTime.Now}");
-            }
-            return RedirectToAction("List");
-        }
+                StorageKey = key,
+                OriginalFileName = fileName,
+                ContentType = contentType,
+                SizeBytes = file.Length,
+                OwnerId = User.GetUserId()!.Value,
+            };
+            db.Files.Add(record);
+            await db.SaveChangesAsync(ct);
 
-        // List all files
-        public async Task<IActionResult> List()
-        {
-            var files = await _s3Service.ListFilesAsync();
-            return View(files);
+            await audit.LogAsync(AuditActions.FileUploaded, true, target: fileName, details: $"id={record.Id}; {FormatHelpers.Bytes(file.Length)}", ct: ct);
+            TempData["Success"] = $"'{fileName}' uploaded.";
+            return RedirectToAction(nameof(List));
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Upload of {FileName} failed", fileName);
+            if (key is not null) await TryDeleteOrphanAsync(key);
+            await audit.LogAsync(AuditActions.FileUploadFailed, false, target: fileName, ct: CancellationToken.None);
+            TempData["Error"] = "The file could not be uploaded. Please try again.";
+            return RedirectToAction(nameof(Upload));
+        }
+    }
 
-        // Download file
-        public IActionResult Download(string key)
-        {
-            var url = _s3Service.GetPreSignedURL(key);
-            return Redirect(url);
-        }
+    [HttpGet]
+    public async Task<IActionResult> List(bool all = false, CancellationToken ct = default)
+    {
+        var isAdmin = User.IsInRole(Roles.Admin);
+        var showAll = all && isAdmin;
+        var userId = User.GetUserId()!.Value;
 
-        // Delete file
-        public async Task<IActionResult> Delete(string key)
-        {
-            try
-            {
-                await _s3Service.DeleteFileAsync(key);
-                TempData["Success"] = "File deleted successfully!";
-                // Add alert for admin
-                _s3Service.AddAlert($"File '{key}' deleted by user at {DateTime.Now}");
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = $"Delete failed: {ex.Message}";
-                _s3Service.AddAlert($"Failed delete attempt: '{key}' at {DateTime.Now}");
-            }
-            return RedirectToAction("List");
-        }
+        var query = db.Files.AsNoTracking();
+        if (!showAll) query = query.Where(f => f.OwnerId == userId);
 
-        // Backup to Glacier (Simulated)
-        public async Task<IActionResult> BackupToGlacier(string key)
+        var files = await query.OrderByDescending(f => f.UploadedAtUtc)
+            .Select(f => new FileRow(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.UploadedAtUtc, f.Owner.Email))
+            .ToListAsync(ct);
+
+        return View(new FileListViewModel { Files = files, ShowAllUsers = showAll, CanSeeAllUsers = isAdmin });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Download(Guid id, CancellationToken ct)
+    {
+        var file = await FindAccessibleAsync(id, AuditActions.FileDownloaded, ct);
+        if (file is null) return NotFound();
+
+        await audit.LogAsync(AuditActions.FileDownloaded, true, target: file.OriginalFileName, details: $"id={file.Id}", ct: ct);
+        return Redirect(storage.GetDownloadUrl(file.StorageKey, file.OriginalFileName));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Delete(Guid id, bool all = false, CancellationToken ct = default)
+    {
+        var file = await FindAccessibleAsync(id, AuditActions.FileDeleted, ct);
+        if (file is null) return NotFound();
+
+        try
         {
-            if (string.IsNullOrEmpty(key)) return BadRequest("Invalid key.");
-            try
-            {
-                // Simulate: Log or copy to cold storage bucket
-                _s3Service.AddAlert($"File '{key}' backed up to Glacier (cold storage)");
-                TempData["Success"] = "File backed up to Glacier for long-term storage.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = "Backup failed.";
-            }
-            return RedirectToAction("List");
+            await storage.DeleteAsync(file.StorageKey, ct);
+            db.Files.Remove(file);
+            await db.SaveChangesAsync(ct);
+            await audit.LogAsync(AuditActions.FileDeleted, true, target: file.OriginalFileName, details: $"id={file.Id}", ct: ct);
+            TempData["Success"] = $"'{file.OriginalFileName}' deleted.";
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Delete of file {FileId} failed", file.Id);
+            TempData["Error"] = "The file could not be deleted. Please try again.";
+        }
+        return RedirectToAction(nameof(List), new { all });
+    }
+
+    /// <summary>Returns the file only if the caller owns it (or is an admin); denied attempts are audited and look like 404s.</summary>
+    private async Task<FileRecord?> FindAccessibleAsync(Guid id, string action, CancellationToken ct)
+    {
+        var file = await db.Files.SingleOrDefaultAsync(f => f.Id == id, ct);
+        if (file is null) return null;
+        if (FileAccessPolicy.CanAccess(User, file)) return file;
+
+        await audit.LogAsync(action, false, target: file.OriginalFileName, details: $"id={file.Id}; not owner", ct: ct);
+        return null;
+    }
+
+    private async Task TryDeleteOrphanAsync(string key)
+    {
+        try { await storage.DeleteAsync(key); }
+        catch (Exception ex) { logger.LogWarning(ex, "Could not remove orphaned object {Key}", key); }
     }
 }

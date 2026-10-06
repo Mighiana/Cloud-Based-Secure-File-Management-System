@@ -1,8 +1,70 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@model UserDashboardViewModel
+@{
+    ViewData["Title"] = "My Dashboard";
 }
+<h2 class="page-title">Welcome, @Model.DisplayName</h2>
+<p class="page-subtitle">
+    @if (Model.LastLoginUtc is { } last)
+    {
+        <span>Signed in at <span class="utc" data-utc="@last.ToString("o")">@last.ToString("yyyy-MM-dd HH:mm") UTC</span></span>
+    }
+</p>
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">My files</div><div class="stat-value">@Model.FileCount</div></div>
+            <i class="fas fa-file stat-icon text-info"></i>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">Storage used</div><div class="stat-value">@FormatHelpers.Bytes(Model.StorageBytes)</div></div>
+            <i class="fas fa-database stat-icon text-warning"></i>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card h-100"><div class="card-body d-flex flex-column justify-content-center">
+            <a asp-controller="File" asp-action="Upload" class="btn btn-primary"><i class="fas fa-cloud-arrow-up me-1"></i>Upload a file</a>
+            <a asp-controller="File" asp-action="List" class="btn btn-outline-primary mt-2"><i class="fas fa-folder-open me-1"></i>Manage files</a>
+        </div></div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">Recent uploads</h5>
+            @if (!Model.RecentFiles.Any())
+            {
+                <p class="text-muted mb-0">You haven't uploaded any files yet.</p>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush list-dark">
+                    @foreach (var f in Model.RecentFiles)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span class="text-truncate me-2"><i class="fas fa-file-lines me-2 text-muted"></i>@f.FileName</span>
+                            <span class="text-muted small text-nowrap">@FormatHelpers.Bytes(f.SizeBytes) · @f.UploadedAtUtc.ToString("MMM dd HH:mm")</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </div></div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">My recent activity</h5>
+            <ul class="list-group list-group-flush list-dark">
+                @foreach (var a in Model.RecentActivity)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span class="text-truncate me-2"><partial name="_AuditRow" model="a" /> <span class="ms-1">@a.Target</span></span>
+                        <span class="text-muted small text-nowrap">@a.TimestampUtc.ToString("MMM dd HH:mm")</span>
+                    </li>
+                }
+            </ul>
+        </div></div>
+    </div>
 </div>

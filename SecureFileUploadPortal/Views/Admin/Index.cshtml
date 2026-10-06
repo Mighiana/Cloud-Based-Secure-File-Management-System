@@ -1,241 +1,134 @@
-﻿@model SecureFileUploadPortal.Models.AdminDashboardViewModel
+@model AdminDashboardViewModel
 @{
-    Layout = "_AdminLayout";
-    ViewData["Title"] = "Dashboard Home";
+    ViewData["Title"] = "Admin Dashboard";
 }
-<div class="container-fluid secure-bg" style="min-height:100vh;">
-    <!-- Top Bar: Time Filter & Quick Actions -->
-    <div class="row mb-3 align-items-center">
-        <div class="col-md-6">
-            <div class="d-flex align-items-center">
-                <h4 class="text-white mb-0 me-3">Security Overview</h4>
-                <select id="timeFilter" class="form-select form-select-sm bg-dark text-white border-0 me-2" style="width: auto;">
-                    <option>Last 24 Hours</option>
-                    <option>Last 7 Days</option>
-                    <option>Last 30 Days</option>
-                    <option>Custom Range</option>
-                </select>
-            </div>
-        </div>
-        <div class="col-md-6 text-end">
-            <div class="btn-group" role="group">
-                <a class="btn btn-outline-primary btn-sm" href="/File/Upload"><i class="fas fa-upload me-1"></i>Upload</a>
-                <a class="btn btn-outline-info btn-sm" href="/File/List"><i class="fas fa-eye me-1"></i>View All</a>
-                <a class="btn btn-outline-secondary btn-sm" href="/Admin/Reports"><i class="fas fa-download me-1"></i>Report</a>
-                <a class="btn btn-outline-warning btn-sm" href="/Admin/Settings"><i class="fas fa-cog me-1"></i>Settings</a>
-            </div>
-        </div>
-    </div>
+<h2 class="page-title">Security overview</h2>
+<p class="page-subtitle">Live figures from the SQL Server database and audit log.</p>
 
-    <!-- KPI Cards with Trends -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card text-white mb-3 secure-card-files animate-fade-in">
-                <div class="card-body">
-                    <h5 class="card-title">Files</h5>
-                    <p class="card-text fs-3 fw-bold">@Model.TotalFiles</p>
-                    <small class="text-success"><i class="fas fa-arrow-up me-1"></i>@Model.FilesTrend today</small>
-                    <canvas id="filesTrendChart" height="50" class="mt-2"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-white mb-3 secure-card-alerts animate-fade-in" style="animation-delay: 0.1s;">
-                <div class="card-body">
-                    <h5 class="card-title">Alerts</h5>
-                    <p class="card-text fs-3 fw-bold">@Model.TotalAlerts</p>
-                    <small class="text-success"><i class="fas fa-arrow-down me-1"></i>@Model.AlertsTrend this week</small>
-                    <canvas id="alertsTrendChart" height="50" class="mt-2"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-white mb-3 secure-card-logs animate-fade-in" style="animation-delay: 0.2s;">
-                <div class="card-body">
-                    <h5 class="card-title">CloudTrail Logs</h5>
-                    <p class="card-text fs-3 fw-bold">@(Model.TotalLogs / 1000)k</p>
-                    <small class="text-danger"><i class="fas fa-arrow-up me-1"></i>@Model.LogsTrend today</small>
-                    <canvas id="logsTrendChart" height="50" class="mt-2"></canvas>
-                </div>
-            </div>
-        </div>
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">Users</div><div class="stat-value">@Model.TotalUsers</div><small class="text-muted">@Model.ActiveUsers active</small></div>
+            <i class="fas fa-users stat-icon text-info"></i>
+        </div></div>
     </div>
-
-    <!-- Main Chart & System Status -->
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <div class="card shadow-sm secure-card-main animate-slide-up">
-                <div class="card-body">
-                    <h5 class="card-title">API & Upload Activity</h5>
-                    <canvas id="activityChart" height="200"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm secure-card-status animate-slide-up" style="animation-delay: 0.1s;">
-                <div class="card-body">
-                    <h5 class="card-title" style="color: #ffffff !important; font-weight: bold;">System Status</h5>
-                    <ul class="list-unstyled">
-                        <li class="text-white mb-2"><i class="fas fa-check-circle me-1"></i>CloudTrail: Healthy</li>
-                        <li class="text-white mb-2"><i class="fas fa-check-circle me-1"></i>S3 Bucket: Healthy</li>
-                        <li class="text-white mb-2"><i class="fas fa-check-circle me-1"></i>File Scanner: Healthy</li>
-                        <li class="text-warning mb-2"><i class="fas fa-exclamation-triangle me-1"></i>IAM Policies: Review Pending</li>
-                    </ul>
-                    <hr>
-                    <h6 class="mb-2" style="color: #ffffff !important; font-weight: bold;">User Info</h6>
-                    <p class="mb-1 small text-white">Welcome, @Model.CurrentUser</p>
-                    <p class="mb-0 small text-white">Last Login: @Model.LastLogin.ToString("MMM dd, yyyy HH:mm")</p>
-                </div>
-            </div>
-        </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">Files</div><div class="stat-value">@Model.TotalFiles</div><small class="text-muted">@FormatHelpers.Bytes(Model.StorageBytes) in S3</small></div>
+            <i class="fas fa-file stat-icon text-primary"></i>
+        </div></div>
     </div>
-
-    <!-- Recent Files, Alerts Feed, Top Users -->
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card shadow-sm secure-card-recent animate-slide-up" style="animation-delay: 0.2s; background: #161b22 !important; border: 1px solid #2c3e50 !important;">
-                <div class="card-body">
-                    <h5 class="card-title" style="color: #ffffff !important; font-weight: bold;">Recent Files</h5>
-                    <div class="list-group list-group-flush">
-                        @if (Model.RecentFiles.Any())
-                        {
-                            @foreach (var file in Model.RecentFiles.Take(5))
-                            {
-                                <div class="list-group-item px-0 border-0" style="background-color: #1a2332 !important; color: #ffffff !important;">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <small class="text-white text-truncate d-block" style="max-width: 150px;">@file.FileName</small>
-                                        <span class="badge bg-success">@file.Status</span>
-                                    </div>
-                                    <small class="text-white">by @file.User | @file.UploadTime.ToString("HH:mm")</small>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <p class="text-white">No recent files.</p>
-                        }
-                    </div>
-                    <a href="/File/List" class="btn btn-outline-primary btn-sm mt-2">View All Files</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm secure-card-alerts-feed animate-slide-up" style="animation-delay: 0.3s; background: #161b22 !important; border: 1px solid #2c3e50 !important;">
-                <div class="card-body">
-                    <h5 class="card-title" style="color: #ffffff !important; font-weight: bold;">Security Alerts Feed</h5>
-                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
-                        @if (Model.Alerts.Any())
-                        {
-                            @foreach (var alert in Model.Alerts.Take(5))
-                            {
-                                <div class="list-group-item px-0 border-0" style="background-color: #1a2332 !important; color: #ffffff !important;">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div>
-                                            <span class="badge bg-@(alert.Severity == "Critical" ? "danger" : alert.Severity == "High" ? "warning" : "info")">@alert.Severity</span>
-                                            <small class="text-white ms-2">@alert.Message</small>
-                                        </div>
-                                        <small class="text-white">@alert.Time.ToString("HH:mm")</small>
-                                    </div>
-                                    <small class="text-white d-block mt-1">@alert.Status</small>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <div class="text-center text-white py-3">
-                                <i class="fas fa-shield-alt fa-2x mb-2"></i>
-                                <p>All systems normal.</p>
-                            </div>
-                        }
-                    </div>
-                    <a href="/Admin/Alerts" class="btn btn-outline-info btn-sm mt-2">View Full Logs</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm secure-card-users animate-slide-up" style="animation-delay: 0.4s; background: #161b22 !important; border: 1px solid #2c3e50 !important;">
-                <div class="card-body">
-                    <h5 class="card-title" style="color: #ffffff !important; font-weight: bold;">Top Users</h5>
-                    <div class="list-group list-group-flush">
-                        @if (Model.TopUsers.Any())
-                        {
-                            @foreach (var user in Model.TopUsers.Take(5))
-                            {
-                                <div class="list-group-item px-0 border-0 d-flex justify-content-between align-items-center" style="background-color: #1a2332 !important; color: #ffffff !important;">
-                                    <small class="text-white">@user.UserName</small>
-                                    <span class="badge bg-primary">@user.ActivityCount</span>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <p class="text-white">No user activity.</p>
-                        }
-                    </div>
-                    <a href="/Admin/Users" class="btn btn-outline-secondary btn-sm mt-2">View Report</a>
-                </div>
-            </div>
-        </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">Audit events (24h)</div><div class="stat-value">@Model.Events24h</div><small class="text-muted">all actions</small></div>
+            <i class="fas fa-list-check stat-icon text-success"></i>
+        </div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">Failed sign-ins (24h)</div><div class="stat-value @(Model.FailedLogins24h > 0 ? "text-danger" : "")">@Model.FailedLogins24h</div><small class="text-muted">incl. lockouts</small></div>
+            <i class="fas fa-user-lock stat-icon text-danger"></i>
+        </div></div>
     </div>
 </div>
 
-<!-- Chart.js Integration -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    // Sample Data for Charts
-    const ctxFiles = document.getElementById('filesTrendChart').getContext('2d');
-    new Chart(ctxFiles, {
-        type: 'line',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-            datasets: [{ data: [1, 2, 1, 3, 2], borderColor: '#3498db', tension: 0.4, fill: false, pointRadius: 0, borderWidth: 2 }]
-        },
-        options: {
-            scales: { y: { display: false }, x: { display: false } },
-            plugins: { legend: { display: false } },
-            elements: { point: { radius: 0 } }
-        }
-    });
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">Activity – last 7 days</h5>
+            <div style="position: relative; height: 260px;"><canvas id="activityChart"></canvas></div>
+        </div></div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">Most active users (7 days)</h5>
+            @if (!Model.TopUsers.Any())
+            {
+                <p class="text-muted mb-0">No activity recorded.</p>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush list-dark">
+                    @foreach (var u in Model.TopUsers)
+                    {
+                        <li class="list-group-item d-flex justify-content-between"><span class="text-truncate">@u.Email</span><span class="badge bg-primary">@u.Events</span></li>
+                    }
+                </ul>
+            }
+        </div></div>
+    </div>
+</div>
 
-    const ctxAlerts = document.getElementById('alertsTrendChart').getContext('2d');
-    new Chart(ctxAlerts, {
-        type: 'line',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-            datasets: [{ data: [5, 3, 2, 1, 0], borderColor: '#e74c3c', tension: 0.4, fill: false, pointRadius: 0, borderWidth: 2 }]
-        },
-        options: {
-            scales: { y: { display: false }, x: { display: false } },
-            plugins: { legend: { display: false } },
-            elements: { point: { radius: 0 } }
-        }
-    });
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0">Recent audit events</h5>
+                <a asp-action="Audit" class="btn btn-outline-info btn-sm">Full audit log</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <tbody>
+                        @foreach (var a in Model.RecentEvents)
+                        {
+                            <tr>
+                                <td class="text-nowrap text-muted small">@a.TimestampUtc.ToString("MMM dd HH:mm:ss")</td>
+                                <td><partial name="_AuditRow" model="a" /></td>
+                                <td class="text-truncate" style="max-width: 180px;">@a.UserEmail</td>
+                                <td class="text-truncate text-muted small" style="max-width: 200px;">@a.Target</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0">Latest uploads</h5>
+                <a asp-controller="File" asp-action="List" asp-route-all="true" class="btn btn-outline-primary btn-sm">All files</a>
+            </div>
+            @if (!Model.RecentFiles.Any())
+            {
+                <p class="text-muted mb-0">No files uploaded.</p>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush list-dark">
+                    @foreach (var f in Model.RecentFiles)
+                    {
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between"><span class="text-truncate me-2">@f.FileName</span><span class="text-muted small text-nowrap">@FormatHelpers.Bytes(f.SizeBytes)</span></div>
+                            <small class="text-muted">@f.OwnerEmail · @f.UploadedAtUtc.ToString("MMM dd HH:mm")</small>
+                        </li>
+                    }
+                </ul>
+            }
+        </div></div>
+    </div>
+</div>
 
-    const ctxLogs = document.getElementById('logsTrendChart').getContext('2d');
-    new Chart(ctxLogs, {
-        type: 'line',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-            datasets: [{ data: [100, 150, 200, 180, 241], borderColor: '#95a5a6', tension: 0.4, fill: false, pointRadius: 0, borderWidth: 2 }]
-        },
-        options: {
-            scales: { y: { display: false }, x: { display: false } },
-            plugins: { legend: { display: false } },
-            elements: { point: { radius: 0 } }
-        }
-    });
-
-    const ctxActivity = document.getElementById('activityChart').getContext('2d');
-    new Chart(ctxActivity, {
-        type: 'line',
-        data: {
-            labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
-            datasets: [
-                { label: 'Uploads', data: [12, 19, 3, 5, 2, 3], borderColor: 'rgba(52, 152, 219, 1)', backgroundColor: 'rgba(52, 152, 219, 0.2)', tension: 0.4 },
-                { label: 'Logins', data: [2, 15, 8, 10, 6, 4], borderColor: 'rgba(39, 174, 96, 1)', backgroundColor: 'rgba(39, 174, 96, 0.2)', tension: 0.4 },
-                { label: 'Errors', data: [1, 0, 2, 1, 0, 0], borderColor: 'rgba(231, 76, 60, 1)', backgroundColor: 'rgba(231, 76, 60, 0.2)', tension: 0.4 }
-            ]
-        },
-        options: { responsive: true, scales: { y: { beginAtZero: true } } }
-    });
-</script>
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        (function () {
+            const days = @Json.Serialize(Model.Last7Days);
+            Chart.defaults.color = '#9aa7b4';
+            Chart.defaults.borderColor = '#2c3e50';
+            new Chart(document.getElementById('activityChart'), {
+                type: 'bar',
+                data: {
+                    labels: days.map(d => d.label),
+                    datasets: [
+                        { label: 'Uploads', data: days.map(d => d.uploads), backgroundColor: '#3498db' },
+                        { label: 'Downloads', data: days.map(d => d.downloads), backgroundColor: '#1abc9c' },
+                        { label: 'Sign-ins', data: days.map(d => d.logins), backgroundColor: '#27ae60' },
+                        { label: 'Failed sign-ins', data: days.map(d => d.failedLogins), backgroundColor: '#e74c3c' }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+            });
+        })();
+    </script>
+}
