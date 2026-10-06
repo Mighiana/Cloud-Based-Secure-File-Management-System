@@ -62,17 +62,17 @@ fetch() { # name url
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-if ! "$BIN/terraform" version 2>/dev/null | grep -q "v$TERRAFORM_VERSION"; then
+if ! "$BIN/terraform" version 2>/dev/null | grep "v$TERRAFORM_VERSION" >/dev/null; then
   zip="$(fetch "terraform_${os}_${arch}" "https://releases.hashicorp.com/terraform/$TERRAFORM_VERSION/terraform_${TERRAFORM_VERSION}_${os}_${arch}.zip")"
   unzip -o -q "$zip" terraform -d "$BIN" && rm -f "$zip"
 fi
 
-if ! "$BIN/tflint" --version 2>/dev/null | grep -q "$TFLINT_VERSION"; then
+if ! "$BIN/tflint" --version 2>/dev/null | grep "$TFLINT_VERSION" >/dev/null; then
   zip="$(fetch "tflint_${os}_${arch}" "https://github.com/terraform-linters/tflint/releases/download/v$TFLINT_VERSION/tflint_${os}_${arch}.zip")"
   unzip -o -q "$zip" tflint -d "$BIN" && rm -f "$zip"
 fi
 
-if ! "$BIN/shellcheck" --version 2>/dev/null | grep -q "$SHELLCHECK_VERSION"; then
+if ! "$BIN/shellcheck" --version 2>/dev/null | grep "$SHELLCHECK_VERSION" >/dev/null; then
   tarball="$(fetch "shellcheck_${os}_${sc_arch}" "https://github.com/koalaman/shellcheck/releases/download/v$SHELLCHECK_VERSION/shellcheck-v$SHELLCHECK_VERSION.$os.$sc_arch.tar.xz")"
   tar -xJf "$tarball" -C "$work" && mv "$work/shellcheck-v$SHELLCHECK_VERSION/shellcheck" "$BIN/" && rm -f "$tarball"
 fi
@@ -85,7 +85,7 @@ done
 "$CHECKOV_VENV/bin/pip" install --quiet --disable-pip-version-check "checkov==$CHECKOV_VERSION"
 
 echo "tools installed in $ROOT/.tools:"
-"$BIN/terraform" version | head -1
-"$BIN/tflint" --version | head -1
+"$BIN/terraform" version | sed -n 1p
+"$BIN/tflint" --version | sed -n 1p
 "$BIN/shellcheck" --version | sed -n 2p
 "$CHECKOV_VENV/bin/checkov" --version
