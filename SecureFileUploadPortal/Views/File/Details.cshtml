@@ -51,7 +51,7 @@
         </div></div>
     </div>
     <div class="col-lg-7">
-        <div class="card mb-3"><div class="card-body">
+        <div class="card h-100"><div class="card-body">
             <h5 class="card-title"><i class="fas fa-shield-virus me-2"></i>Validation</h5>
             <dl class="row mb-0 small">
                 <dt class="col-4">Status</dt><dd class="col-8">@f.Status</dd>
@@ -61,23 +61,25 @@
                 <dt class="col-4">Completed (UTC)</dt><dd class="col-8">@(f.ValidatedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</dd>
             </dl>
         </div></div>
-        <div class="card"><div class="card-body">
-            <h5 class="card-title"><i class="fas fa-list-check me-2"></i>Audit history</h5>
-            <div class="table-responsive">
-                <table class="table table-dark table-sm mb-0">
-                    <tbody>
-                        @foreach (var a in Model.History)
-                        {
-                            <tr>
-                                <td class="text-nowrap text-muted small">@a.TimestampUtc.ToString("MMM dd HH:mm:ss")</td>
-                                <td><partial name="_AuditRow" model="a" /></td>
-                                <td class="text-truncate mw-180 small">@a.UserEmail</td>
-                                <td class="text-truncate mw-240 text-muted small" title="@a.Details">@a.Details</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div></div>
     </div>
 </div>
+
+<div class="card mt-3"><div class="card-body">
+    <h5 class="card-title"><i class="fas fa-list-check me-2"></i>Audit history</h5>
+    <div class="table-responsive">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Time (UTC)</th><th>Event</th><th>Actor</th><th>Details</th></tr></thead>
+            <tbody>
+                @foreach (var a in Model.History)
+                {
+                    <tr>
+                        <td class="text-nowrap text-muted small">@a.TimestampUtc.ToString("MMM dd HH:mm:ss")</td>
+                        <td class="text-nowrap"><partial name="_AuditRow" model="a" /></td>
+                        <td class="text-nowrap small">@a.UserEmail</td>
+                        <td class="text-muted small text-break w-100">@a.Details</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div></div>

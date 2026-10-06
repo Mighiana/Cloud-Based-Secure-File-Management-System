@@ -56,7 +56,11 @@
         <div class="card"><div class="card-body">
             <h5 class="card-title">Create user</h5>
             <form asp-action="CreateUser" method="post">
-                <div asp-validation-summary="All" class="alert alert-dark-danger py-2 small"></div>
+                @* The tag helper emits an inline style when valid, which the CSP blocks. *@
+                @if (!ViewData.ModelState.IsValid)
+                {
+                    <div asp-validation-summary="All" class="alert alert-dark-danger py-2 small"></div>
+                }
                 <div class="row g-3 align-items-start">
                 <div class="col-md-6 col-xl-3">
                     <label asp-for="NewUser.Email" class="form-label">E-mail</label>

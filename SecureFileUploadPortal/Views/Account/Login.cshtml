@@ -11,7 +11,11 @@
     </div>
     <form asp-action="Login" method="post" novalidate>
         <input type="hidden" asp-for="ReturnUrl" />
-        <div asp-validation-summary="ModelOnly" class="alert alert-dark-danger py-2 small"></div>
+        @* The tag helper emits an inline style when valid, which the CSP blocks. *@
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div asp-validation-summary="ModelOnly" class="alert alert-dark-danger py-2 small"></div>
+        }
         <div class="mb-3">
             <label asp-for="Email" class="form-label"></label>
             <input asp-for="Email" class="form-control" autocomplete="username" autofocus />

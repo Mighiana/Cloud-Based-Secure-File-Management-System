@@ -385,9 +385,18 @@ public class IntegrationTests(PortalFactory factory) : IClassFixture<PortalFacto
         Assert.Contains("script-src 'self'", csp);
         Assert.Contains("frame-ancestors 'none'", csp);
         Assert.DoesNotContain("unsafe-inline", csp);
-        var html = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("<script>", html);
-        Assert.DoesNotContain("cdn", html, StringComparison.OrdinalIgnoreCase);
+
+        // Inline <script> or style="" would be blocked by the CSP, so no page may render them.
+        foreach (var path in new[] { "/", "/File/List", "/File/Upload", "/Admin/Index", "/Admin/Users", "/Admin/Audit",
+                     "/Admin/Integrity", "/Admin/Logs", "/Admin/Reports", "/Admin/Settings" })
+        {
+            var html = await admin.GetStringAsync(path);
+            Assert.DoesNotContain("<script>", html);
+            Assert.DoesNotContain("style=", html);
+            Assert.DoesNotContain("cdn", html, StringComparison.OrdinalIgnoreCase);
+        }
+        var login = await factory.CreateClient().GetStringAsync("/Account/Login");
+        Assert.DoesNotContain("style=", login);
     }
 
     [Fact]
