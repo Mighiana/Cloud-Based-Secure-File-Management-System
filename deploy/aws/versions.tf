@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.7"
 
   required_providers {
     aws = {
@@ -15,4 +15,11 @@ terraform {
 
 provider "aws" {
   region = var.region
+
+  default_tags {
+    tags = {
+      Project   = "secure-file-portal"
+      ManagedBy = "terraform"
+    }
+  }
 }

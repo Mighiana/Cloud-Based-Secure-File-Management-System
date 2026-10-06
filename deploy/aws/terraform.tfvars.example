@@ -1,0 +1,7 @@
+name_prefix  = "acme-secure-files"
+region       = "eu-central-1"
+alert_emails = ["security-team@example.com"]
+# Optional: SSE-KMS with your own key instead of the default SSE-S3.
+# kms_key_arn = "arn:aws:kms:eu-central-1:111122223333:key/..."
+# Optional: let the admin log viewer read an existing CloudTrail bucket.
+# cloudtrail_bucket_name = "acme-cloudtrail-logs"

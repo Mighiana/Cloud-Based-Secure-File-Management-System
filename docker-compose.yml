@@ -1,6 +1,8 @@
-# Local demo stack: ASP.NET Core app + SQL Server + LocalStack (S3-compatible).
+# Local demo stack: ASP.NET Core app + SQL Server + LocalStack (S3, SNS, Lambda) + ClamAV.
 # Usage: cp .env.example .env  (edit values)  &&  docker compose up --build
-# Not a production deployment - see README "Deploying to AWS".
+# Everything runs locally with no AWS account; not a production deployment (see deploy/aws).
+name: secure-file-portal
+
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -18,26 +20,48 @@ services:
       retries: 12
       start_period: 20s
 
-  s3:
+  # LocalStack community edition: S3 buckets, SNS alert topic and (optionally) the upload-scan Lambda.
+  aws:
     image: localstack/localstack:3.8
     environment:
-      SERVICES: s3
+      SERVICES: s3,sns,sqs,lambda,iam,sts,logs
+      UPLOAD_SCAN_LAMBDA: ${UPLOAD_SCAN_LAMBDA:-true}
+      LAMBDA_DOCKER_NETWORK: secure-file-portal
     ports:
       - "4566:4566"
     volumes:
-      - ./deploy/localstack/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
+      - ./deploy/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
+      - ./lambda/upload-scan/handler.py:/opt/upload-scan/handler.py:ro
+      # Lets LocalStack start the Lambda runtime container. Set UPLOAD_SCAN_LAMBDA=false to skip.
+      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD-SHELL", "awslocal s3api head-bucket --bucket secure-files && awslocal s3api head-bucket --bucket demo-cloudtrail"]
+      test: ["CMD-SHELL", "test -f /tmp/init-aws.done"]
       interval: 5s
       timeout: 5s
-      retries: 24
+      retries: 36
+
+  clamav:
+    image: clamav/clamav:1.4
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamdb:/var/lib/clamav
+    healthcheck:
+      # The first start downloads signatures (~1-2 min); later starts reuse the clamdb volume.
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
   app:
     build: .
     depends_on:
       sqlserver:
         condition: service_healthy
-      s3:
+      aws:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
     ports:
       - "8080:8080"
@@ -45,13 +69,17 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=SecureFilePortal;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
       Database__ApplyMigrationsOnStartup: "true"
-      Storage__BucketName: secure-files
-      Storage__ServiceUrl: http://s3:4566
+      Storage__QuarantineBucketName: secure-files-quarantine
+      Storage__ApprovedBucketName: secure-files-approved
+      Storage__ServiceUrl: http://aws:4566
       Storage__PublicServiceUrl: http://localhost:4566
       Storage__ForcePathStyle: "true"
       Storage__ServerSideEncryption: AES256
       CloudTrail__BucketName: demo-cloudtrail
       CloudTrail__AccountId: "000000000000"
+      Validation__ClamAv__Enabled: ${CLAMAV_ENABLED:-true}
+      Validation__ClamAv__Host: clamav
+      Validation__ClamAv__Port: "3310"
       # LocalStack accepts any credentials; real AWS should use an IAM role instead.
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
@@ -62,6 +90,11 @@ services:
     volumes:
       - dpkeys:/keys
 
+networks:
+  default:
+    name: secure-file-portal
+
 volumes:
   sqldata:
   dpkeys:
+  clamdb:

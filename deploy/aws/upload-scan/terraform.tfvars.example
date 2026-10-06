@@ -1,4 +1,0 @@
-files_bucket_name = "my-secure-files-bucket"
-region            = "eu-north-1"
-alert_emails      = ["security-team@example.com"]
-# kms_key_arn     = "arn:aws:kms:eu-north-1:111122223333:key/..."

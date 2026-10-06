@@ -24,3 +24,10 @@ secrets.json
 # Python / Terraform
 __pycache__/
 .pytest_cache/
+.terraform/
+*.tfstate
+*.tfstate.*
+deploy/aws/build/
+
+# Pinned dev tools (make bootstrap)
+.tools/
