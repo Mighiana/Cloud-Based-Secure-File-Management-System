@@ -120,10 +120,10 @@ def test_disguised_executable_is_rejected(aws):
     out = handler.lambda_handler(s3_event("invoice.pdf", len(EXE)), None)
 
     assert out["scanned"][0]["status"] == "rejected"
-    assert tags(s3, "invoice.pdf") == {
-        "scan-status": "rejected",
-        "scan-reason": "content does not match the .pdf file signature",
-    }
+    t = tags(s3, "invoice.pdf")
+    assert t["scan-status"] == "rejected"
+    assert t["scan-reason"] == "content does not match the .pdf file signature"
+    assert t["scan-etag"] == out["scanned"][0]["etag"]
     [alert] = alerts()
     assert alert["Subject"] == "Secure File Upload: Scan Failed"
     assert "FILE SCAN FAILED" in alert["Message"]
@@ -182,3 +182,60 @@ def test_tagging_and_alerts_can_be_disabled(aws, monkeypatch):
 
 def test_non_s3_records_are_ignored(aws):
     assert handler.lambda_handler({"Records": [{"eventSource": "aws:sqs"}]}, None) == {"scanned": []}
+
+
+def test_duplicate_event_is_skipped_without_a_second_alert(aws):
+    s3, alerts = aws
+    s3.put_object(Bucket=BUCKET, Key="dup.pdf", Body=PDF)
+    event = s3_event("dup.pdf", len(PDF))
+
+    first = handler.lambda_handler(event, None)
+    second = handler.lambda_handler(event, None)
+
+    assert len(first["scanned"]) == 1
+    assert second == {"scanned": []}
+    assert len(alerts()) == 1
+
+
+def test_new_object_version_is_scanned_again(aws):
+    s3, alerts = aws
+    s3.put_object(Bucket=BUCKET, Key="v.pdf", Body=PDF)
+    handler.lambda_handler(s3_event("v.pdf", len(PDF)), None)
+    s3.put_object(Bucket=BUCKET, Key="v.pdf", Body=EXE)
+
+    out = handler.lambda_handler(s3_event("v.pdf", len(EXE)), None)
+
+    assert out["scanned"][0]["status"] == "rejected"
+    assert len(alerts()) == 2
+
+
+def test_failure_marks_error_and_reraises_for_retry(aws, monkeypatch):
+    s3, alerts = aws
+    s3.put_object(Bucket=BUCKET, Key="boom.pdf", Body=PDF)
+
+    def fail(*_, **__):
+        raise RuntimeError("sns down")
+
+    monkeypatch.setattr(handler, "_message", fail)
+    with pytest.raises(RuntimeError):
+        handler.lambda_handler(s3_event("boom.pdf", len(PDF)), None)
+    assert tags(s3, "boom.pdf")["scan-status"] == "error"
+
+    # A retry after an error is not treated as a duplicate.
+    monkeypatch.undo()
+    monkeypatch.setenv("SNS_TOPIC_ARN", "")
+    out = handler.lambda_handler(s3_event("boom.pdf", len(PDF)), None)
+    assert out["scanned"][0]["status"] == "clean"
+
+
+def test_request_id_is_logged_for_correlation(aws, capsys):
+    s3, _ = aws
+    s3.put_object(Bucket=BUCKET, Key="c.txt", Body=b"hi")
+
+    class Ctx:
+        aws_request_id = "req-123"
+
+    handler.lambda_handler(s3_event("c.txt", 2), Ctx())
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert line["request_id"] == "req-123"
+    assert line["key"] == "c.txt"

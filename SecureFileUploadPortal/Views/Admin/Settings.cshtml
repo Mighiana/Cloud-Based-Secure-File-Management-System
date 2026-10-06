@@ -11,7 +11,8 @@
             <h5 class="card-title"><i class="fab fa-aws me-2"></i>Object storage</h5>
             <dl class="row mb-0 small">
                 <dt class="col-5">Endpoint</dt><dd class="col-7 mono">@Model.StorageEndpoint</dd>
-                <dt class="col-5">Bucket</dt><dd class="col-7 mono">@Model.BucketName</dd>
+                <dt class="col-5">Quarantine bucket</dt><dd class="col-7 mono">@Model.QuarantineBucket</dd>
+                <dt class="col-5">Approved bucket</dt><dd class="col-7 mono">@Model.ApprovedBucket</dd>
                 <dt class="col-5">Region</dt><dd class="col-7 mono">@Model.Region</dd>
                 <dt class="col-5">Server-side encryption</dt><dd class="col-7 mono">@Model.ServerSideEncryption @(Model.KmsKeyConfigured ? "(customer KMS key)" : "")</dd>
                 <dt class="col-5">Pre-signed URL lifetime</dt><dd class="col-7">@Model.PresignedUrlMinutes min</dd>
@@ -26,6 +27,9 @@
             <dl class="row mb-0 small">
                 <dt class="col-5">Maximum size</dt><dd class="col-7">@Model.MaxFileSizeMB MB</dd>
                 <dt class="col-5">Allowed extensions</dt><dd class="col-7 mono">@string.Join(" ", Model.AllowedExtensions)</dd>
+                <dt class="col-5">Validation worker</dt><dd class="col-7">@(Model.ValidationWorkerInProcess ? "in this process" : "external process")</dd>
+                <dt class="col-5">ClamAV</dt><dd class="col-7 mono">@(Model.ClamAvEnabled ? $"enabled ({Model.ClamAvEndpoint})" : "disabled (basic validation only)")</dd>
+                <dt class="col-5">Scan attempts before quarantine</dt><dd class="col-7">@Model.ScanMaxAttempts</dd>
                 <dt class="col-5">Environment</dt><dd class="col-7 mono">@Model.Environment</dd>
             </dl>
         </div></div>

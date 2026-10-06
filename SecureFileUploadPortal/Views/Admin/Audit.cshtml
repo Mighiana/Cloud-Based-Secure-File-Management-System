@@ -50,9 +50,9 @@
                     <tr>
                         <td class="text-nowrap small">@a.TimestampUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
                         <td><partial name="_AuditRow" model="a" /></td>
-                        <td class="text-truncate" style="max-width: 220px;">@a.UserEmail</td>
-                        <td class="text-truncate" style="max-width: 240px;">@a.Target</td>
-                        <td class="text-truncate text-muted small" style="max-width: 240px;">@a.Details</td>
+                        <td class="text-truncate mw-220">@a.UserEmail</td>
+                        <td class="text-truncate mw-240">@a.Target</td>
+                        <td class="text-truncate text-muted small mw-240">@a.Details</td>
                         <td class="mono small">@a.IpAddress</td>
                     </tr>
                 }

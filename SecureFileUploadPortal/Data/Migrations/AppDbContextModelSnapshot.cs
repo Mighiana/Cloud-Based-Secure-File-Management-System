@@ -94,9 +94,22 @@ namespace SecureFileUploadPortal.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("EntryHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<Guid?>("FileId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("IpAddress")
                         .HasMaxLength(45)
                         .HasColumnType("nvarchar(45)");
+
+                    b.Property<string>("PreviousHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
 
                     b.Property<bool>("Succeeded")
                         .HasColumnType("bit");
@@ -118,6 +131,8 @@ namespace SecureFileUploadPortal.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("FileId");
+
                     b.HasIndex("TimestampUtc");
 
                     b.HasIndex("Action", "TimestampUtc");
@@ -131,10 +146,17 @@ namespace SecureFileUploadPortal.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
@@ -144,8 +166,33 @@ namespace SecureFileUploadPortal.Data.Migrations
                     b.Property<int>("OwnerId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ScanEngine")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("StorageArea")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("StorageKey")
                         .IsRequired()
@@ -155,12 +202,25 @@ namespace SecureFileUploadPortal.Data.Migrations
                     b.Property<DateTime>("UploadedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("ValidatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ValidationAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ValidationStartedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Sha256");
 
                     b.HasIndex("StorageKey")
                         .IsUnique();
 
                     b.HasIndex("OwnerId", "UploadedAtUtc");
+
+                    b.HasIndex("Status", "NextAttemptAtUtc");
 
                     b.ToTable("Files");
                 });

@@ -2,6 +2,9 @@
 
 2026 reconstruction of the console-built Lambda from the 2025 coursework deployment.
 These are file-hygiene checks (size, extension, file signature), not malware scanning.
+
+S3 delivers events at least once, so processing is idempotent: the object's ETag is recorded in a
+scan-etag tag and a repeated event for the same object version is skipped without a second alert.
 """
 
 import json
@@ -28,6 +31,9 @@ SIGNATURES = {
 
 CLEAN = "clean"
 REJECTED = "rejected"
+ERROR = "error"
+FINAL_STATES = (CLEAN, REJECTED)
+MISSING = ("NoSuchKey", "404")
 
 
 def _settings():
@@ -96,52 +102,99 @@ def _log(level, message, **fields):
     print(json.dumps({"level": level, "message": message, **fields}))
 
 
-def scan_record(record, s3, sns, settings):
+def _code(error):
+    return error.response.get("Error", {}).get("Code")
+
+
+def _tags(s3, bucket, key):
+    response = s3.get_object_tagging(Bucket=bucket, Key=key)
+    return {t["Key"]: t["Value"] for t in response.get("TagSet", [])}
+
+
+def _put_tags(s3, bucket, key, status, reason, etag):
+    s3.put_object_tagging(
+        Bucket=bucket,
+        Key=key,
+        Tagging={"TagSet": [
+            {"Key": "scan-status", "Value": status},
+            {"Key": "scan-reason", "Value": _tag_value(reason)},
+            {"Key": "scan-etag", "Value": _tag_value(etag)},
+        ]},
+    )
+
+
+def scan_record(record, s3, sns, settings, request_id=None):
     bucket = record["s3"]["bucket"]["name"]
     key = unquote_plus(record["s3"]["object"]["key"])
+    # The object key is the portal's random storage key, so it correlates these logs with the app's audit trail.
+    correlation = {"bucket": bucket, "key": key, "request_id": request_id}
 
     try:
         obj = s3.get_object(Bucket=bucket, Key=key, Range=f"bytes=0-{HEADER_BYTES - 1}")
     except ClientError as e:
-        code = e.response.get("Error", {}).get("Code")
-        if code in ("NoSuchKey", "404"):
-            _log("WARNING", "object deleted before it could be scanned", bucket=bucket, key=key)
+        if _code(e) in MISSING:
+            _log("WARNING", "object deleted before it could be scanned", **correlation)
             return None
-        if code == "InvalidRange":
-            obj = {"Body": None, "ContentLength": 0, "ContentType": "application/octet-stream"}
+        if _code(e) == "InvalidRange":
+            obj = s3.head_object(Bucket=bucket, Key=key)
+            obj["Body"] = None
         else:
             raise
 
-    header = obj["Body"].read() if obj.get("Body") else b""
-    size = _total_size(obj, record["s3"]["object"].get("size", len(header)))
-    status, reason = evaluate(key, size, header, settings)
+    etag = (obj.get("ETag") or "").strip('"')
+    try:
+        if settings["tag_objects"]:
+            existing = _tags(s3, bucket, key)
+            if existing.get("scan-status") in FINAL_STATES and existing.get("scan-etag") == etag:
+                _log("INFO", "duplicate event for an already scanned object version; skipped", etag=etag, **correlation)
+                return None
 
-    result = {
-        "bucket": bucket,
-        "key": key,
-        "size": size,
-        "content_type": obj.get("ContentType", "unknown"),
-        "status": status,
-        "reason": reason,
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-    }
+        header = obj["Body"].read() if obj.get("Body") else b""
+        size = _total_size(obj, record["s3"]["object"].get("size", len(header)))
+        status, reason = evaluate(key, size, header, settings)
 
-    if settings["tag_objects"]:
-        s3.put_object_tagging(
-            Bucket=bucket,
-            Key=key,
-            Tagging={"TagSet": [
-                {"Key": "scan-status", "Value": status},
-                {"Key": "scan-reason", "Value": _tag_value(reason)},
-            ]},
-        )
+        result = {
+            **correlation,
+            "etag": etag,
+            "size": size,
+            "content_type": obj.get("ContentType", "unknown"),
+            "status": status,
+            "reason": reason,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        }
 
-    if settings["topic_arn"]:
-        subject, body = _message(result)
-        sns.publish(TopicArn=settings["topic_arn"], Subject=subject, Message=body)
+        # Alert first, then record the result: if tagging fails the retry may alert twice (at-least-once),
+        # but an alert is never lost because the object was already marked as scanned.
+        if settings["topic_arn"]:
+            subject, body = _message(result)
+            sns.publish(TopicArn=settings["topic_arn"], Subject=subject, Message=body)
+
+        if settings["tag_objects"]:
+            _put_tags(s3, bucket, key, status, reason, etag)
+    except ClientError as e:
+        if _code(e) in MISSING:
+            # The portal promotes approved files out of quarantine, which can race with this function.
+            _log("INFO", "object removed while scanning (already processed by the portal)", **correlation)
+            return None
+        _mark_error(s3, bucket, key, etag, settings, correlation)
+        raise
+    except Exception:
+        _mark_error(s3, bucket, key, etag, settings, correlation)
+        raise
 
     _log("INFO", "scan complete", **result)
     return result
+
+
+def _mark_error(s3, bucket, key, etag, settings, correlation):
+    """Best-effort scan-status=error so a failed scan is visible; Lambda's retry will scan again."""
+    _log("ERROR", "scan failed; will be retried", **correlation)
+    if not settings["tag_objects"]:
+        return
+    try:
+        _put_tags(s3, bucket, key, ERROR, "scan failed, retrying", etag)
+    except ClientError:
+        pass
 
 
 def lambda_handler(event, context):
@@ -149,7 +202,7 @@ def lambda_handler(event, context):
     s3 = boto3.client("s3")
     sns = boto3.client("sns")
     results = [
-        scan_record(r, s3, sns, settings)
+        scan_record(r, s3, sns, settings, getattr(context, "aws_request_id", None))
         for r in event.get("Records", [])
         if r.get("eventSource") == "aws:s3"
     ]

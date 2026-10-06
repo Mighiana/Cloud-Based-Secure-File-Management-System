@@ -1,0 +1,39 @@
+@model IntegrityViewModel
+@{
+    ViewData["Title"] = "Audit Integrity";
+    var r = Model.Report;
+}
+<h2 class="page-title">Audit log integrity</h2>
+<p class="page-subtitle">Each audit entry stores a SHA-256 hash of its fields and of the previous entry's hash. Re-computing the chain detects entries that were edited or deleted.</p>
+
+<div class="card mb-3 @(r.IsValid ? "border-success" : "border-danger")"><div class="card-body d-flex align-items-center gap-3">
+    <i class="fas @(r.IsValid ? "fa-link text-success" : "fa-link-slash text-danger") fa-2x"></i>
+    <div>
+        @if (r.IsValid)
+        {
+            <h5 class="card-title mb-1">Chain intact</h5>
+            <div class="small text-muted">@r.VerifiedCount chained entries verified@(r.LegacyCount > 0 ? $" · {r.LegacyCount} older entries predate the chain" : "").</div>
+        }
+        else
+        {
+            <h5 class="card-title mb-1 text-danger">Chain broken at entry #@r.BrokenAtId</h5>
+            <div class="small">@r.Problem</div>
+        }
+    </div>
+</div></div>
+
+@if (r.IsValid && r.HeadId is not null)
+{
+    <div class="card mb-3"><div class="card-body">
+        <h5 class="card-title">Chain head</h5>
+        <dl class="row mb-0 small">
+            <dt class="col-sm-3">Latest entry</dt><dd class="col-sm-9">#@r.HeadId of @Model.TotalEntries</dd>
+            <dt class="col-sm-3">Head hash</dt><dd class="col-sm-9 mono text-break">@r.HeadHash</dd>
+        </dl>
+    </div></div>
+}
+
+<div class="alert alert-dark-info small">
+    <i class="fas fa-circle-info me-2"></i>Tamper-evident, not tamper-proof: someone with write access to the whole table could rebuild every hash, or remove the newest entries.
+    Recording the head hash outside the database (e.g. in a ticket or an object-locked bucket) and comparing it later closes that gap.
+</div>

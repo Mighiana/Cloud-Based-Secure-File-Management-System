@@ -29,7 +29,7 @@ else
                     @foreach (var l in Model.Logs)
                     {
                         <tr>
-                            <td class="mono text-truncate" style="max-width: 520px;">@l.Key</td>
+                            <td class="mono text-truncate mw-520">@l.Key</td>
                             <td class="text-end">@FormatHelpers.Bytes(l.SizeBytes)</td>
                             <td class="text-nowrap">@l.LastModifiedUtc?.ToString("yyyy-MM-dd HH:mm")</td>
                             <td class="text-end"><a asp-action="ViewLog" asp-route-key="@l.Key" class="btn btn-outline-info btn-sm">Download JSON</a></td>

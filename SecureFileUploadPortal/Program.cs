@@ -15,6 +15,7 @@ using SecureFileUploadPortal.Data;
 using SecureFileUploadPortal.Options;
 using SecureFileUploadPortal.Security;
 using SecureFileUploadPortal.Services;
+using SecureFileUploadPortal.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
@@ -23,6 +24,8 @@ var services = builder.Services;
 services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
 services.Configure<CloudTrailOptions>(builder.Configuration.GetSection(CloudTrailOptions.SectionName));
 services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.SectionName));
+services.Configure<ValidationOptions>(builder.Configuration.GetSection(ValidationOptions.SectionName));
+var validationOptions = builder.Configuration.GetSection(ValidationOptions.SectionName).Get<ValidationOptions>() ?? new ValidationOptions();
 var uploadOptions = builder.Configuration.GetSection(UploadOptions.SectionName).Get<UploadOptions>() ?? new UploadOptions();
 
 // ---- Database ----
@@ -46,6 +49,15 @@ services.AddScoped<UserService>();
 services.AddScoped<AuditService>();
 services.AddSingleton<UploadValidator>();
 
+// ---- Post-upload validation pipeline (scanners run in registration order; all must return Clean) ----
+services.AddSingleton<ValidationSignal>();
+services.AddSingleton<IFileSecurityScanner, BasicFileValidationScanner>();
+if (validationOptions.ClamAv.Enabled)
+    services.AddSingleton<IFileSecurityScanner, ClamAvSecurityScanner>();
+services.AddScoped<FileValidationProcessor>();
+if (validationOptions.RunWorker)
+    services.AddHostedService<FileValidationWorker>();
+
 // ---- Authentication & authorization ----
 services.AddAuthentication(AuthConstants.Scheme)
     .AddCookie(AuthConstants.Scheme, o =>
@@ -66,12 +78,13 @@ services.AddAuthentication(AuthConstants.Scheme)
 services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
+var loginPermitLimit = builder.Configuration.GetValue("Security:LoginAttemptsPerMinute", 10);
 services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     o.AddPolicy(AuthConstants.LoginRateLimitPolicy, ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = loginPermitLimit, Window = TimeSpan.FromMinutes(1) }));
 });
 
 services.AddControllersWithViews(o =>

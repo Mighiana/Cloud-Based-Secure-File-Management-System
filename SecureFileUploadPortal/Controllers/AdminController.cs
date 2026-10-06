@@ -8,6 +8,7 @@ using SecureFileUploadPortal.Models;
 using SecureFileUploadPortal.Options;
 using SecureFileUploadPortal.Security;
 using SecureFileUploadPortal.Services;
+using SecureFileUploadPortal.Validation;
 
 namespace SecureFileUploadPortal.Controllers;
 
@@ -20,6 +21,8 @@ public class AdminController(
     IOptions<StorageOptions> storageOptions,
     IOptions<UploadOptions> uploadOptions,
     IOptions<CloudTrailOptions> cloudTrailOptions,
+    IOptions<ValidationOptions> validationOptions,
+    ValidationSignal validationSignal,
     IWebHostEnvironment env,
     TimeProvider clock,
     ILogger<AdminController> logger) : Controller
@@ -32,11 +35,15 @@ public class AdminController(
 
         var weekEvents = await db.AuditLogs.AsNoTracking()
             .Where(a => a.TimestampUtc >= firstDay)
-            .Select(a => new { a.TimestampUtc, a.Action, a.Succeeded, a.UserEmail })
+            .Select(a => new { a.TimestampUtc, a.Action, a.Succeeded })
             .ToListAsync(ct);
 
         int Count(DateTime day, string action, bool succeeded) =>
             weekEvents.Count(e => e.TimestampUtc.Date == day && e.Action == action && e.Succeeded == succeeded);
+
+        var since7d = now.AddDays(-7);
+        int Since(Func<string, bool, bool> match) =>
+            weekEvents.Count(e => e.TimestampUtc >= since7d && match(e.Action, e.Succeeded));
 
         var model = new AdminDashboardViewModel
         {
@@ -49,18 +56,22 @@ public class AdminController(
             Events24h = await db.AuditLogs.CountAsync(a => a.TimestampUtc >= since24h, ct),
             Last7Days = Enumerable.Range(0, 7).Select(i => firstDay.AddDays(i)).Select(d => new DailyActivity(
                 d.ToString("ddd dd"),
-                Count(d, AuditActions.FileUploaded, true),
+                Count(d, AuditActions.FileUploadReceived, true),
                 Count(d, AuditActions.FileDownloaded, true),
                 Count(d, AuditActions.LoginSucceeded, true),
                 Count(d, AuditActions.LoginFailed, false) + Count(d, AuditActions.LoginLockedOut, false))).ToList(),
             RecentEvents = await db.AuditLogs.AsNoTracking().OrderByDescending(a => a.TimestampUtc).Take(8).ToListAsync(ct),
             RecentFiles = await db.Files.AsNoTracking().OrderByDescending(f => f.UploadedAtUtc).Take(5)
-                .Select(f => new FileRow(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.UploadedAtUtc, f.Owner.Email))
+                .Select(f => new FileRow(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.UploadedAtUtc, f.Owner.Email, f.Status))
                 .ToListAsync(ct),
-            TopUsers = weekEvents.Where(e => e.UserEmail != "anonymous")
-                .GroupBy(e => e.UserEmail)
-                .Select(g => new UserActivity(g.Key, g.Count()))
-                .OrderByDescending(u => u.Events).Take(5).ToList(),
+            FilesByStatus = await db.Files.GroupBy(f => f.Status).Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(g => g.Key, g => g.Count, ct),
+            FailedLogins7d = Since((a, _) => a is AuditActions.LoginFailed or AuditActions.LoginLockedOut),
+            BlockedDownloads7d = Since((a, ok) => a == AuditActions.DownloadBlockedSecurityState || (a == AuditActions.FileDownloaded && !ok)),
+            UploadRejections7d = Since((a, _) => a is AuditActions.FileUploadRejected or AuditActions.FileValidationRejected),
+            ScanFailures7d = Since((a, _) => a is AuditActions.FileScanFailed or AuditActions.FileQuarantined),
+            RecentSecurityEvents = await db.AuditLogs.AsNoTracking().Where(a => !a.Succeeded)
+                .OrderByDescending(a => a.Id).Take(8).ToListAsync(ct),
         };
         return View(model);
     }
@@ -164,6 +175,41 @@ public class AdminController(
         return query;
     }
 
+    // ---------- File security ----------
+
+    /// <summary>Puts a quarantined file back through the pipeline, e.g. after a scanner outage.</summary>
+    [HttpPost]
+    public async Task<IActionResult> Rescan(Guid id, CancellationToken ct)
+    {
+        var file = await db.Files.SingleOrDefaultAsync(f => f.Id == id, ct);
+        if (file is not { Status: FileSecurityStatus.Quarantined, StorageArea: StorageArea.Quarantine })
+        {
+            TempData["Error"] = "Only quarantined files can be re-scanned.";
+            return RedirectToAction("Details", "File", new { id });
+        }
+
+        file.Status = FileSecurityStatus.Pending;
+        file.StatusReason = "re-scan requested by an administrator";
+        file.ValidationAttempts = 0;
+        file.NextAttemptAtUtc = null;
+        file.ConcurrencyStamp = Guid.NewGuid();
+        await db.SaveChangesAsync(ct);
+        await audit.LogAsync(AuditActions.FileRescanRequested, true, target: file.OriginalFileName, fileId: file.Id, ct: ct);
+        validationSignal.Notify();
+        TempData["Success"] = $"'{file.OriginalFileName}' queued for another scan.";
+        return RedirectToAction("Details", "File", new { id });
+    }
+
+    /// <summary>Recomputes the audit hash chain and reports the first broken entry, if any.</summary>
+    [HttpGet]
+    public async Task<IActionResult> Integrity(CancellationToken ct)
+    {
+        var report = await AuditChain.VerifyAsync(db, ct);
+        await audit.LogAsync(AuditActions.AuditChainVerified, report.IsValid, target: "AuditLogs",
+            details: report.IsValid ? $"{report.VerifiedCount} entries verified; head #{report.HeadId}" : $"broken at #{report.BrokenAtId}: {report.Problem}", ct: ct);
+        return View(new IntegrityViewModel { Report = report, TotalEntries = await db.AuditLogs.CountAsync(ct) });
+    }
+
     // ---------- CloudTrail ----------
 
     [HttpGet]
@@ -226,16 +272,16 @@ public class AdminController(
         switch (type)
         {
             case "files":
-                csv.Row("FileId", "FileName", "ContentType", "SizeBytes", "Owner", "UploadedUtc");
+                csv.Row("FileId", "FileName", "ContentType", "SizeBytes", "Owner", "UploadedUtc", "Status", "StatusReason", "Sha256");
                 foreach (var f in await db.Files.AsNoTracking().OrderByDescending(f => f.UploadedAtUtc)
-                             .Select(f => new { f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.Owner.Email, f.UploadedAtUtc }).ToListAsync(ct))
-                    csv.Row(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.Email, f.UploadedAtUtc);
+                             .Select(f => new { f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.Owner.Email, f.UploadedAtUtc, f.Status, f.StatusReason, f.Sha256 }).ToListAsync(ct))
+                    csv.Row(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.Email, f.UploadedAtUtc, f.Status, f.StatusReason, f.Sha256);
                 break;
 
             case "audit":
-                csv.Row("TimestampUtc", "User", "Action", "Succeeded", "Target", "Details", "IpAddress");
-                foreach (var a in await db.AuditLogs.AsNoTracking().OrderByDescending(a => a.TimestampUtc).Take(50_000).ToListAsync(ct))
-                    csv.Row(a.TimestampUtc, a.UserEmail, a.Action, a.Succeeded, a.Target, a.Details, a.IpAddress);
+                csv.Row("Id", "TimestampUtc", "User", "Action", "Succeeded", "Target", "Details", "IpAddress", "FileId", "EntryHash");
+                foreach (var a in await db.AuditLogs.AsNoTracking().OrderByDescending(a => a.Id).Take(50_000).ToListAsync(ct))
+                    csv.Row(a.Id, a.TimestampUtc, a.UserEmail, a.Action, a.Succeeded, a.Target, a.Details, a.IpAddress, a.FileId, a.EntryHash);
                 break;
 
             case "cloudtrail" when cloudTrail.IsConfigured:
@@ -270,7 +316,12 @@ public class AdminController(
         return View(new SettingsViewModel
         {
             StorageEndpoint = string.IsNullOrWhiteSpace(s.ServiceUrl) ? $"AWS S3 ({s.Region})" : s.ServiceUrl,
-            BucketName = s.BucketName,
+            QuarantineBucket = s.QuarantineBucketName,
+            ApprovedBucket = s.ApprovedBucketName,
+            ValidationWorkerInProcess = validationOptions.Value.RunWorker,
+            ClamAvEnabled = validationOptions.Value.ClamAv.Enabled,
+            ClamAvEndpoint = $"{validationOptions.Value.ClamAv.Host}:{validationOptions.Value.ClamAv.Port}",
+            ScanMaxAttempts = validationOptions.Value.MaxAttempts,
             Region = s.Region,
             ServerSideEncryption = s.ServerSideEncryption,
             KmsKeyConfigured = !string.IsNullOrWhiteSpace(s.KmsKeyId),

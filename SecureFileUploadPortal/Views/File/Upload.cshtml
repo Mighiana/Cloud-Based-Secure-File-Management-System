@@ -3,9 +3,9 @@
     ViewData["Title"] = "Upload";
 }
 <h2 class="page-title">Upload a file</h2>
-<p class="page-subtitle">Files are stored in Amazon S3 under a random object key with server-side encryption. Only you and administrators can access them.</p>
+<p class="page-subtitle">Files are checked, stored in a private quarantine bucket and scanned. Download is enabled only after the file is approved.</p>
 
-<div class="card" style="max-width: 640px;">
+<div class="card mw-640">
     <div class="card-body">
         <form asp-action="Upload" method="post" enctype="multipart/form-data">
             <div class="mb-3">
@@ -13,6 +13,13 @@
                 <input type="file" class="form-control" name="file" id="file" required accept="@string.Join(",", Model.AllowedExtensions)" />
                 <div class="form-text">Max @Model.MaxFileSizeMB MB · Allowed: @string.Join(", ", Model.AllowedExtensions)</div>
             </div>
+            <ol class="pipeline small text-muted mb-3">
+                <li><i class="fas fa-ruler me-1"></i>Size, type &amp; file signature</li>
+                <li><i class="fas fa-fingerprint me-1"></i>SHA-256</li>
+                <li><i class="fas fa-box-archive me-1"></i>Quarantine</li>
+                <li><i class="fas fa-shield-virus me-1"></i>Scan</li>
+                <li><i class="fas fa-circle-check me-1"></i>Approved</li>
+            </ol>
             <button type="submit" class="btn btn-primary"><i class="fas fa-cloud-arrow-up me-1"></i>Upload</button>
             <a asp-action="List" class="btn btn-outline-secondary ms-2">Cancel</a>
         </form>

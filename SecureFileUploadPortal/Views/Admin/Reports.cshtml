@@ -40,10 +40,9 @@
     </div>
 </div>
 
-<div class="card" style="max-width: 720px;"><div class="card-body">
+<div class="card mw-720"><div class="card-body">
     <h5 class="card-title">Storage usage</h5>
-    <div class="progress" style="height: 18px;" role="progressbar" aria-valuenow="@Model.StoragePercent.ToString("0")" aria-valuemin="0" aria-valuemax="100">
-        <div class="progress-bar @(Model.StoragePercent > 80 ? "bg-danger" : "bg-success")" style="width: @Model.StoragePercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div>
-    </div>
+    <progress class="storage-meter w-100 @(Model.StoragePercent > 80 ? "meter-danger" : "")" max="100" value="@Model.StoragePercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+              aria-label="Storage used">@Model.StoragePercent.ToString("0")%</progress>
     <small class="text-muted">@FormatHelpers.Bytes(Model.StorageBytes) of @Model.StorageQuotaMB MB budget (@Model.StoragePercent.ToString("0.#")%). The budget is informational and set by <code>Storage:StorageQuotaMB</code>.</small>
 </div></div>

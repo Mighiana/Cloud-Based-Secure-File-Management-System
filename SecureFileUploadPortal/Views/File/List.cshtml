@@ -19,7 +19,7 @@
     </div>
 </div>
 
-<div class="card"><div class="card-body p-0">
+<div class="card" data-auto-refresh="@(Model.HasFilesInProgress ? "5" : null)"><div class="card-body p-0">
     @if (!Model.Files.Any())
     {
         <p class="text-muted p-4 mb-0">No files yet.</p>
@@ -31,7 +31,7 @@
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Type</th>
+                        <th>Security</th>
                         <th class="text-end">Size</th>
                         @if (Model.ShowAllUsers) { <th>Owner</th> }
                         <th>Uploaded (UTC)</th>
@@ -42,16 +42,23 @@
                     @foreach (var f in Model.Files)
                     {
                         <tr>
-                            <td class="text-truncate" style="max-width: 320px;"><i class="fas fa-file-lines me-2 text-muted"></i>@f.FileName</td>
-                            <td class="text-muted small text-truncate" style="max-width: 200px;" title="@f.ContentType">@f.ContentType</td>
+                            <td class="text-truncate mw-320"><i class="fas fa-file-lines me-2 text-muted"></i><a asp-action="Details" asp-route-id="@f.Id">@f.FileName</a></td>
+                            <td><span class="badge @AuditDisplay.StatusBadge(f.Status)"><i class="fas @AuditDisplay.StatusIcon(f.Status) me-1"></i>@f.Status</span></td>
                             <td class="text-end text-nowrap">@FormatHelpers.Bytes(f.SizeBytes)</td>
                             @if (Model.ShowAllUsers) { <td>@f.OwnerEmail</td> }
                             <td class="text-nowrap">@f.UploadedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
                             <td class="text-end text-nowrap">
-                                <a asp-action="Download" asp-route-id="@f.Id" class="btn btn-outline-success btn-sm"><i class="fas fa-download me-1"></i>Download</a>
-                                <form asp-action="Delete" asp-route-id="@f.Id" asp-route-all="@Model.ShowAllUsers" method="post" class="d-inline"
-                                      onsubmit="return confirm('Delete this file permanently?');">
-                                    <button type="submit" class="btn btn-outline-danger btn-sm ms-1"><i class="fas fa-trash me-1"></i>Delete</button>
+                                @if (f.Status == FileSecurityStatus.Approved)
+                                {
+                                    <a asp-action="Download" asp-route-id="@f.Id" class="btn btn-outline-success btn-sm"><i class="fas fa-download me-1"></i>Download</a>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Only approved files can be downloaded"><i class="fas fa-lock me-1"></i>Download</button>
+                                }
+                                <a asp-action="Details" asp-route-id="@f.Id" class="btn btn-outline-info btn-sm ms-1"><i class="fas fa-circle-info"></i><span class="visually-hidden">Details</span></a>
+                                <form asp-action="Delete" asp-route-id="@f.Id" asp-route-all="@Model.ShowAllUsers" method="post" class="d-inline" data-confirm="Delete this file permanently?">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm ms-1"><i class="fas fa-trash"></i><span class="visually-hidden">Delete</span></button>
                                 </form>
                             </td>
                         </tr>
@@ -61,4 +68,4 @@
         </div>
     }
 </div></div>
-<p class="text-muted small mt-2">Downloads use pre-signed S3 URLs that expire after a few minutes.</p>
+<p class="text-muted small mt-2">New uploads stay in quarantine until validation approves them. Downloads use pre-signed S3 URLs that expire after a few minutes.</p>

@@ -1,6 +1,7 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Options;
+using SecureFileUploadPortal.Data;
 using SecureFileUploadPortal.Options;
 
 namespace SecureFileUploadPortal.Services;
@@ -19,58 +20,51 @@ public class S3FileStorageService : IFileStorageService
         _options = options.Value;
     }
 
-    public async Task<string> UploadAsync(Stream content, string originalFileName, string contentType, CancellationToken ct = default)
+    public async Task<string> UploadToQuarantineAsync(Stream content, string originalFileName, string contentType, CancellationToken ct = default)
     {
         // Random object key: user-supplied names never become S3 paths.
         var key = $"{Guid.NewGuid():N}{Path.GetExtension(originalFileName).ToLowerInvariant()}";
         var request = new PutObjectRequest
         {
-            BucketName = _options.BucketName,
+            BucketName = _options.QuarantineBucketName,
             Key = key,
             InputStream = content,
             ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
         };
-
-        switch (_options.ServerSideEncryption)
-        {
-            case "aws:kms":
-                request.ServerSideEncryptionMethod = ServerSideEncryptionMethod.AWSKMS;
-                if (!string.IsNullOrWhiteSpace(_options.KmsKeyId))
-                    request.ServerSideEncryptionKeyManagementServiceKeyId = _options.KmsKeyId;
-                break;
-            case "AES256":
-                request.ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256;
-                break;
-        }
-
+        (request.ServerSideEncryptionMethod, request.ServerSideEncryptionKeyManagementServiceKeyId) = Encryption();
         await _s3.PutObjectAsync(request, ct);
         return key;
     }
 
-    public async Task<IReadOnlyList<StoredObject>> ListAsync(CancellationToken ct = default)
+    public async Task CopyToApprovedAsync(string key, string contentType, CancellationToken ct = default)
     {
-        var result = new List<StoredObject>();
-        var request = new ListObjectsV2Request { BucketName = _options.BucketName };
-        ListObjectsV2Response response;
-        do
+        var request = new CopyObjectRequest
         {
-            response = await _s3.ListObjectsV2Async(request, ct);
-            foreach (var o in response.S3Objects ?? [])
-                result.Add(new StoredObject(o.Key, o.Size ?? 0, o.LastModified?.ToUniversalTime()));
-            request.ContinuationToken = response.NextContinuationToken;
-        } while (response.IsTruncated == true);
-
-        return result;
+            SourceBucket = _options.QuarantineBucketName,
+            SourceKey = key,
+            DestinationBucket = _options.ApprovedBucketName,
+            DestinationKey = key,
+            ContentType = contentType,
+            MetadataDirective = S3MetadataDirective.REPLACE,
+        };
+        (request.ServerSideEncryptionMethod, request.ServerSideEncryptionKeyManagementServiceKeyId) = Encryption();
+        await _s3.CopyObjectAsync(request, ct);
     }
 
-    public Task DeleteAsync(string key, CancellationToken ct = default) =>
-        _s3.DeleteObjectAsync(_options.BucketName, key, ct);
+    public async Task ReadQuarantinedAsync(string key, Stream destination, CancellationToken ct = default)
+    {
+        using var response = await _s3.GetObjectAsync(_options.QuarantineBucketName, key, ct);
+        await response.ResponseStream.CopyToAsync(destination, ct);
+    }
 
-    public string GetDownloadUrl(string key, string downloadFileName)
+    public Task DeleteAsync(StorageArea area, string key, CancellationToken ct = default) =>
+        _s3.DeleteObjectAsync(Bucket(area), key, ct);
+
+    public string GetApprovedDownloadUrl(string key, string downloadFileName)
     {
         var request = new GetPreSignedUrlRequest
         {
-            BucketName = _options.BucketName,
+            BucketName = _options.ApprovedBucketName,
             Key = key,
             Verb = HttpVerb.GET,
             Expires = DateTime.UtcNow.AddMinutes(_options.PresignedUrlMinutes),
@@ -81,8 +75,16 @@ public class S3FileStorageService : IFileStorageService
         return _presigner.GetPreSignedURL(request);
     }
 
-    public async Task<long> GetTotalSizeBytesAsync(CancellationToken ct = default) =>
-        (await ListAsync(ct)).Sum(o => o.SizeBytes);
+    private string Bucket(StorageArea area) =>
+        area == StorageArea.Approved ? _options.ApprovedBucketName : _options.QuarantineBucketName;
+
+    /// <summary>Per-request SSE settings; "None" leaves encryption to the bucket default.</summary>
+    private (ServerSideEncryptionMethod?, string?) Encryption() => _options.ServerSideEncryption switch
+    {
+        "aws:kms" => (ServerSideEncryptionMethod.AWSKMS, string.IsNullOrWhiteSpace(_options.KmsKeyId) ? null : _options.KmsKeyId),
+        "AES256" => (ServerSideEncryptionMethod.AES256, null),
+        _ => (null, null),
+    };
 
     internal static string BrowserEndpoint(StorageOptions o) =>
         !string.IsNullOrWhiteSpace(o.PublicServiceUrl) ? o.PublicServiceUrl : o.ServiceUrl ?? string.Empty;

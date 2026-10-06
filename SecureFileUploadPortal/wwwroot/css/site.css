@@ -136,3 +136,27 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+/* Utility classes (no inline style attributes, so CSP can forbid inline styles) */
+.mw-180 { max-width: 180px; }
+.mw-200 { max-width: 200px; }
+.mw-220 { max-width: 220px; }
+.mw-240 { max-width: 240px; }
+.mw-320 { max-width: 320px; }
+.mw-520 { max-width: 520px; }
+.mw-640 { max-width: 640px; }
+.mw-720 { max-width: 720px; }
+.chart-box { position: relative; height: 260px; }
+.section-title { color: #fff; font-weight: 600; font-size: 1rem; margin-bottom: 0.75rem; }
+
+progress.storage-meter { height: 18px; appearance: none; border: 1px solid var(--border); border-radius: 0.375rem; background: #0d1117; overflow: hidden; }
+progress.storage-meter::-webkit-progress-bar { background: #0d1117; }
+progress.storage-meter::-webkit-progress-value { background: var(--accent-green); }
+progress.storage-meter::-moz-progress-bar { background: var(--accent-green); }
+progress.storage-meter.meter-danger::-webkit-progress-value { background: var(--accent-red); }
+progress.storage-meter.meter-danger::-moz-progress-bar { background: var(--accent-red); }
+
+/* Upload pipeline steps */
+.pipeline { display: flex; flex-wrap: wrap; gap: 0.25rem 0; list-style: none; padding: 0; }
+.pipeline li { display: flex; align-items: center; }
+.pipeline li + li::before { content: "\2192"; margin: 0 0.5rem; color: var(--border); }

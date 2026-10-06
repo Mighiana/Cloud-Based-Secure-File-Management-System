@@ -27,6 +27,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(f => f.StorageKey).HasMaxLength(200).IsRequired();
             e.Property(f => f.OriginalFileName).HasMaxLength(255).IsRequired();
             e.Property(f => f.ContentType).HasMaxLength(150).IsRequired();
+            e.HasIndex(f => f.Sha256);
+            e.HasIndex(f => new { f.Status, f.NextAttemptAtUtc });
+            e.Property(f => f.Sha256).HasMaxLength(64).IsFixedLength().IsUnicode(false).IsRequired();
+            e.Property(f => f.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(f => f.StorageArea).HasConversion<string>().HasMaxLength(20);
+            e.Property(f => f.StatusReason).HasMaxLength(500);
+            e.Property(f => f.ScanEngine).HasMaxLength(200);
+            e.Property(f => f.ConcurrencyStamp).IsConcurrencyToken();
+            e.Ignore(f => f.IsDownloadable);
             e.HasOne(f => f.Owner).WithMany(u => u.Files).HasForeignKey(f => f.OwnerId).OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -39,6 +48,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(a => a.Target).HasMaxLength(500);
             e.Property(a => a.Details).HasMaxLength(1000);
             e.Property(a => a.IpAddress).HasMaxLength(45);
+            e.HasIndex(a => a.FileId);
+            e.Property(a => a.PreviousHash).HasMaxLength(64).IsUnicode(false);
+            e.Property(a => a.EntryHash).HasMaxLength(64).IsUnicode(false);
             // No FK: audit rows must survive independently of the user table.
         });
     }

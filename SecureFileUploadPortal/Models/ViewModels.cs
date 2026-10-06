@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using SecureFileUploadPortal.Data;
+using SecureFileUploadPortal.Services;
 
 namespace SecureFileUploadPortal.Models;
 
@@ -14,13 +15,22 @@ public class LoginViewModel
     public string? ReturnUrl { get; set; }
 }
 
-public record FileRow(Guid Id, string FileName, string ContentType, long SizeBytes, DateTime UploadedAtUtc, string OwnerEmail);
+public record FileRow(Guid Id, string FileName, string ContentType, long SizeBytes, DateTime UploadedAtUtc, string OwnerEmail, FileSecurityStatus Status);
 
 public class FileListViewModel
 {
     public IReadOnlyList<FileRow> Files { get; init; } = [];
     public bool ShowAllUsers { get; init; }
     public bool CanSeeAllUsers { get; init; }
+    public bool HasFilesInProgress => Files.Any(f => f.Status is FileSecurityStatus.Pending or FileSecurityStatus.Validating);
+}
+
+public class FileDetailsViewModel
+{
+    public FileRecord File { get; init; } = null!;
+    public string OwnerEmail { get; init; } = string.Empty;
+    public bool ShowStorageKey { get; init; }
+    public IReadOnlyList<AuditLog> History { get; init; } = [];
 }
 
 public class UploadViewModel
@@ -41,7 +51,6 @@ public class UserDashboardViewModel
 
 public record DailyActivity(string Label, int Uploads, int Downloads, int Logins, int FailedLogins);
 
-public record UserActivity(string Email, int Events);
 
 public class AdminDashboardViewModel
 {
@@ -54,7 +63,19 @@ public class AdminDashboardViewModel
     public IReadOnlyList<DailyActivity> Last7Days { get; init; } = [];
     public IReadOnlyList<AuditLog> RecentEvents { get; init; } = [];
     public IReadOnlyList<FileRow> RecentFiles { get; init; } = [];
-    public IReadOnlyList<UserActivity> TopUsers { get; init; } = [];
+    public IReadOnlyDictionary<FileSecurityStatus, int> FilesByStatus { get; init; } = new Dictionary<FileSecurityStatus, int>();
+    public int FailedLogins7d { get; init; }
+    public int BlockedDownloads7d { get; init; }
+    public int UploadRejections7d { get; init; }
+    public int ScanFailures7d { get; init; }
+    public IReadOnlyList<AuditLog> RecentSecurityEvents { get; init; } = [];
+    public int StatusCount(FileSecurityStatus s) => FilesByStatus.TryGetValue(s, out var n) ? n : 0;
+}
+
+public class IntegrityViewModel
+{
+    public AuditChainReport Report { get; init; } = null!;
+    public int TotalEntries { get; init; }
 }
 
 public record UserRow(int Id, string Email, string DisplayName, string Role, bool IsActive, DateTime CreatedAtUtc, DateTime? LastLoginAtUtc, int FileCount, bool IsLockedOut);
@@ -119,7 +140,12 @@ public class ReportsViewModel
 public class SettingsViewModel
 {
     public string StorageEndpoint { get; init; } = string.Empty;
-    public string BucketName { get; init; } = string.Empty;
+    public string QuarantineBucket { get; init; } = string.Empty;
+    public string ApprovedBucket { get; init; } = string.Empty;
+    public bool ValidationWorkerInProcess { get; init; }
+    public bool ClamAvEnabled { get; init; }
+    public string ClamAvEndpoint { get; init; } = string.Empty;
+    public int ScanMaxAttempts { get; init; }
     public string Region { get; init; } = string.Empty;
     public string ServerSideEncryption { get; init; } = string.Empty;
     public bool KmsKeyConfigured { get; init; }

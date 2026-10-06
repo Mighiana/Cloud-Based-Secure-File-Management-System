@@ -11,7 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Secure File Portal</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="~/lib/fontawesome/css/all.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body class="app-shell">
@@ -33,6 +33,7 @@
             <a class="nav-link-item @Active("Admin", "Index")" asp-controller="Admin" asp-action="Index"><i class="fas fa-gauge-high me-2"></i>Admin Dashboard</a>
             <a class="nav-link-item @Active("Admin", "Users")" asp-controller="Admin" asp-action="Users"><i class="fas fa-users me-2"></i>Users &amp; Roles</a>
             <a class="nav-link-item @Active("Admin", "Audit")" asp-controller="Admin" asp-action="Audit"><i class="fas fa-list-check me-2"></i>Audit Log</a>
+            <a class="nav-link-item @Active("Admin", "Integrity")" asp-controller="Admin" asp-action="Integrity"><i class="fas fa-link me-2"></i>Audit Integrity</a>
             <a class="nav-link-item @Active("Admin", "Logs")" asp-controller="Admin" asp-action="Logs"><i class="fas fa-scroll me-2"></i>CloudTrail Logs</a>
             <a class="nav-link-item @Active("Admin", "Reports")" asp-controller="Admin" asp-action="Reports"><i class="fas fa-chart-column me-2"></i>Reports</a>
             <a class="nav-link-item @Active("Admin", "Settings")" asp-controller="Admin" asp-action="Settings"><i class="fas fa-gear me-2"></i>Configuration</a>
@@ -53,6 +54,7 @@
         @RenderBody()
     </main>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

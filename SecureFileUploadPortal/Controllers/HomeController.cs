@@ -24,7 +24,7 @@ public class HomeController(AppDbContext db) : Controller
             StorageBytes = await files.SumAsync(f => (long?)f.SizeBytes, ct) ?? 0,
             LastLoginUtc = user.LastLoginAtUtc,
             RecentFiles = await files.OrderByDescending(f => f.UploadedAtUtc).Take(5)
-                .Select(f => new FileRow(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.UploadedAtUtc, user.Email))
+                .Select(f => new FileRow(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.UploadedAtUtc, user.Email, f.Status))
                 .ToListAsync(ct),
             RecentActivity = await db.AuditLogs.AsNoTracking().Where(a => a.UserId == userId)
                 .OrderByDescending(a => a.TimestampUtc).Take(8).ToListAsync(ct),
