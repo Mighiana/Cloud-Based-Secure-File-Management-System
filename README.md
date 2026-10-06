@@ -12,6 +12,8 @@ offline security tests.
 
 ![Admin security overview](docs/screenshots/09-admin-security-dashboard.png)
 
+**▶ [Demo video (84 s)](docs/demo/secure-file-portal-demo.mp4)** — clean upload approved, disguised `.exe` rejected, EICAR test file quarantined by ClamAV, blocked download, admin dashboard and audit-chain check. Recorded from the local Docker stack (LocalStack in place of AWS); preview in [Screenshots](#screenshots).
+
 > **Project history.** This started as coursework for *Cloud Services and Security* at
 > Óbuda University (Nov 2025, first pushed Dec 2025). That version did the S3 work (encrypted
 > uploads, pre-signed downloads, CloudTrail log viewer) plus an S3-triggered Lambda + SNS
@@ -70,6 +72,10 @@ administrators who manage accounts, review security events and re-scan quarantin
 | **Infrastructure** | Terraform root module with `terraform test`, TFLint, Checkov; Docker Compose with SQL Server, LocalStack (S3, SNS, Lambda, SQS for the Lambda dead-letter queue) and ClamAV |
 
 ## Screenshots
+
+![Demo walkthrough](docs/demo/demo.webp)
+
+<sub>Animated preview of the [demo video](docs/demo/secure-file-portal-demo.mp4). The "malware" is the harmless EICAR antivirus test string.</sub>
 
 All screenshots are from the current code running in the Docker demo below (demo accounts,
 LocalStack instead of AWS, real ClamAV container). The "malware" is the harmless
