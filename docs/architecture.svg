@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="780" viewBox="0 0 1400 780" font-family="Segoe UI, system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa7b4"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2ea043"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f85149"/></marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a2332"/><stop offset="1" stop-color="#0d1117"/></linearGradient>
+  </defs>
+  <rect width="1400" height="780" fill="url(#bg)"/>
+  <text x="40" y="50" fill="#e6edf3" font-size="26" font-weight="700">Secure File Portal — file security pipeline</text>
+  <text x="40" y="78" fill="#9aa7b4" font-size="15">ASP.NET Core 8 MVC · SQL Server (EF Core) · Amazon S3 quarantine / approved buckets · ClamAV (optional) · Terraform</text>
+
+  <g font-size="14" fill="#e6edf3">
+    <!-- User -->
+    <rect x="40" y="250" width="150" height="100" rx="14" fill="#161b22" stroke="#00c3ff" stroke-width="2"/>
+    <text x="115" y="292" text-anchor="middle" font-weight="700" font-size="17">USER</text>
+    <text x="115" y="315" text-anchor="middle" fill="#9aa7b4" font-size="13">Browser · HTTPS</text>
+
+    <!-- App -->
+    <rect x="250" y="130" width="290" height="340" rx="14" fill="#161b22" stroke="#3498db" stroke-width="2"/>
+    <text x="395" y="165" text-anchor="middle" font-weight="700" font-size="17">APPLICATION</text>
+    <text x="395" y="186" text-anchor="middle" fill="#9aa7b4" font-size="13">ASP.NET Core 8 MVC</text>
+    <rect x="270" y="202" width="250" height="78" rx="8" fill="#1f2a38"/>
+    <text x="285" y="225" font-weight="700" fill="#58a6ff">Auth / role control</text>
+    <text x="285" y="246" fill="#c9d1d9" font-size="12.5">PBKDF2 · lockout · rate limit · cookies</text>
+    <text x="285" y="266" fill="#c9d1d9" font-size="12.5">Admin / User · ownership · CSRF · CSP</text>
+    <rect x="270" y="292" width="250" height="78" rx="8" fill="#1f2a38"/>
+    <text x="285" y="315" font-weight="700" fill="#58a6ff">Upload checks</text>
+    <text x="285" y="336" fill="#c9d1d9" font-size="12.5">size · extension · magic bytes</text>
+    <text x="285" y="356" fill="#c9d1d9" font-size="12.5">SHA-256 · duplicate / known-bad hash</text>
+    <rect x="270" y="382" width="250" height="72" rx="8" fill="#1f2a38"/>
+    <text x="285" y="405" font-weight="700" fill="#58a6ff">Download gate</text>
+    <text x="285" y="426" fill="#c9d1d9" font-size="12.5">pre-signed URL only when Approved</text>
+    <text x="285" y="444" fill="#c9d1d9" font-size="12.5">else blocked + audited</text>
+
+    <!-- Quarantine bucket -->
+    <rect x="620" y="130" width="230" height="110" rx="14" fill="#161b22" stroke="#d29922" stroke-width="2"/>
+    <text x="735" y="165" text-anchor="middle" font-weight="700" font-size="16">S3 QUARANTINE</text>
+    <text x="735" y="188" text-anchor="middle" fill="#9aa7b4" font-size="12.5">private · versioned · SSE-S3/KMS</text>
+    <text x="735" y="208" text-anchor="middle" fill="#9aa7b4" font-size="12.5">TLS-only · ACLs disabled</text>
+    <text x="735" y="228" text-anchor="middle" fill="#d29922" font-size="12.5">status: Pending</text>
+
+    <!-- Worker -->
+    <rect x="620" y="300" width="230" height="140" rx="14" fill="#161b22" stroke="#a371f7" stroke-width="2"/>
+    <text x="735" y="333" text-anchor="middle" font-weight="700" font-size="16">VALIDATION WORKER</text>
+    <text x="735" y="356" text-anchor="middle" fill="#c9d1d9" font-size="12.5">re-hash + signature (basic)</text>
+    <text x="735" y="376" text-anchor="middle" fill="#c9d1d9" font-size="12.5">ClamAV INSTREAM (optional)</text>
+    <text x="735" y="398" text-anchor="middle" fill="#9aa7b4" font-size="12.5">fail-closed: retry → quarantine</text>
+    <text x="735" y="420" text-anchor="middle" fill="#9aa7b4" font-size="12.5">IFileSecurityScanner</text>
+
+    <!-- ClamAV -->
+    <rect x="910" y="330" width="130" height="80" rx="12" fill="#161b22" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="975" y="364" text-anchor="middle" font-weight="700">clamd</text>
+    <text x="975" y="386" text-anchor="middle" fill="#9aa7b4" font-size="12">ClamAV 1.4</text>
+
+    <!-- Approved bucket -->
+    <rect x="620" y="500" width="230" height="100" rx="14" fill="#161b22" stroke="#2ea043" stroke-width="2"/>
+    <text x="735" y="535" text-anchor="middle" font-weight="700" font-size="16">S3 APPROVED</text>
+    <text x="735" y="558" text-anchor="middle" fill="#9aa7b4" font-size="12.5">private · versioned · SSE · TLS-only</text>
+    <text x="735" y="580" text-anchor="middle" fill="#2ea043" font-size="12.5">status: Approved</text>
+
+    <!-- SQL -->
+    <rect x="250" y="540" width="290" height="160" rx="14" fill="#161b22" stroke="#e67e22" stroke-width="2"/>
+    <text x="395" y="575" text-anchor="middle" font-weight="700" font-size="17">SQL SERVER</text>
+    <text x="270" y="604" fill="#c9d1d9" font-size="13">Users · roles · lockout · security stamp</text>
+    <text x="270" y="628" fill="#c9d1d9" font-size="13">FileRecords · state · SHA-256 · attempts</text>
+    <text x="270" y="652" fill="#c9d1d9" font-size="13" font-weight="700">AuditLogs · SHA-256 hash chain</text>
+    <text x="270" y="676" fill="#9aa7b4" font-size="12.5">tamper-evident · verified on Integrity page</text>
+
+    <!-- Lambda / SNS -->
+    <rect x="910" y="130" width="200" height="110" rx="14" fill="#161b22" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="1010" y="163" text-anchor="middle" font-weight="700">upload-scan Lambda</text>
+    <text x="1010" y="185" text-anchor="middle" fill="#9aa7b4" font-size="12">2026 reconstruction of</text>
+    <text x="1010" y="203" text-anchor="middle" fill="#9aa7b4" font-size="12">the 2025 console build</text>
+    <text x="1010" y="223" text-anchor="middle" fill="#9aa7b4" font-size="12">tags · idempotent · SQS DLQ</text>
+    <rect x="1170" y="145" width="190" height="80" rx="14" fill="#161b22" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="1265" y="178" text-anchor="middle" font-weight="700">SNS FileUploadAlerts</text>
+    <text x="1265" y="200" text-anchor="middle" fill="#9aa7b4" font-size="12">e-mail alerts</text>
+
+    <!-- CloudTrail -->
+    <rect x="910" y="560" width="200" height="80" rx="14" fill="#161b22" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="1010" y="594" text-anchor="middle" font-weight="700">CloudTrail bucket</text>
+    <text x="1010" y="616" text-anchor="middle" fill="#9aa7b4" font-size="12">read-only viewer (admins)</text>
+
+    <!-- IaC -->
+    <rect x="1170" y="300" width="190" height="200" rx="14" fill="#161b22" stroke="#00c3ff" stroke-width="1.5"/>
+    <text x="1265" y="333" text-anchor="middle" font-weight="700">Terraform</text>
+    <text x="1185" y="360" fill="#c9d1d9" font-size="12.5">buckets + access logs</text>
+    <text x="1185" y="382" fill="#c9d1d9" font-size="12.5">web-app + Lambda roles</text>
+    <text x="1185" y="400" fill="#c9d1d9" font-size="12.5">scoped IAM policies</text>
+    <text x="1185" y="422" fill="#c9d1d9" font-size="12.5">terraform test (mocked)</text>
+    <text x="1185" y="444" fill="#c9d1d9" font-size="12.5">TFLint · Checkov</text>
+    <text x="1185" y="470" fill="#9aa7b4" font-size="12">no AWS credentials</text>
+    <text x="1185" y="488" fill="#9aa7b4" font-size="12">needed for checks</text>
+  </g>
+
+  <g stroke="#9aa7b4" stroke-width="2" fill="none" marker-end="url(#a)">
+    <path d="M190 300 H246"/>
+    <path d="M540 245 C580 245 580 185 616 185"/>
+    <path d="M735 240 V296"/>
+    <path d="M850 370 H906"/>
+    <path d="M850 185 H906" stroke-dasharray="6 4"/>
+    <path d="M1110 185 H1166" stroke-dasharray="6 4"/>
+    <path d="M395 470 V536"/>
+    <path d="M620 400 C580 420 580 560 544 600"/>
+    <path d="M910 585 C860 470 620 470 544 455" stroke-dasharray="6 4"/>
+  </g>
+  <path d="M735 440 V496" stroke="#2ea043" stroke-width="2.5" fill="none" marker-end="url(#g)"/>
+  <path d="M620 550 C560 550 560 420 544 418" stroke="#2ea043" stroke-width="2" fill="none" stroke-dasharray="2 0"/>
+  <path d="M250 418 C220 418 200 340 194 330" stroke="#2ea043" stroke-width="2.5" fill="none" marker-end="url(#g)"/>
+
+  <g font-size="12.5" fill="#9aa7b4">
+    <text x="196" y="290">upload</text>
+    <text x="555" y="205">PutObject</text>
+    <text x="745" y="275">read + re-hash</text>
+    <text x="856" y="362">scan</text>
+    <text x="745" y="478" fill="#2ea043">copy if clean</text>
+    <text x="856" y="176">S3 event</text>
+    <text x="1116" y="176">alert</text>
+    <text x="404" y="510">metadata · state · audit</text>
+    <text x="560" y="520">state + audit</text>
+    <text x="868" y="500">read-only (admins)</text>
+    <text x="150" y="440" fill="#2ea043">pre-signed GET</text>
+    <text x="150" y="458" fill="#2ea043">(15 min)</text>
+  </g>
+
+  <rect x="40" y="720" width="1320" height="40" rx="10" fill="#161b22" stroke="#30363d"/>
+  <text x="60" y="745" fill="#c9d1d9" font-size="13.5">Pending → Validating → <tspan fill="#2ea043">Approved</tspan> | <tspan fill="#f85149">Rejected</tspan> | <tspan fill="#d29922">Quarantined</tspan>   ·   only Approved files in the approved bucket can be downloaded   ·   dashed = optional / separate path</text>
+</svg>

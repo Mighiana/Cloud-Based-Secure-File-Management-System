@@ -1,53 +1,69 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
-using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.RateLimiting;
+using SecureFileUploadPortal.Data;
+using SecureFileUploadPortal.Models;
+using SecureFileUploadPortal.Security;
+using SecureFileUploadPortal.Services;
 
-namespace SecureFileUploadPortal.Controllers
+namespace SecureFileUploadPortal.Controllers;
+
+public class AccountController(UserService users, AuditService audit) : Controller
 {
-    public class AccountController : Controller
+    [AllowAnonymous, HttpGet]
+    public IActionResult Login(string? returnUrl = null)
     {
-        private readonly IConfiguration _config;
+        if (User.Identity?.IsAuthenticated == true) return RedirectToAction("Index", "Home");
+        return View(new LoginViewModel { ReturnUrl = returnUrl });
+    }
 
-        public AccountController(IConfiguration config)
+    [AllowAnonymous, HttpPost, EnableRateLimiting(AuthConstants.LoginRateLimitPolicy)]
+    public async Task<IActionResult> Login(LoginViewModel model, CancellationToken ct)
+    {
+        if (!ModelState.IsValid) return View(model);
+
+        var result = await users.VerifyLoginAsync(model.Email, model.Password, ct);
+        var email = UserService.NormalizeEmail(model.Email);
+
+        switch (result.Status)
         {
-            _config = config;
+            case LoginStatus.Success:
+                var user = result.User!;
+                await HttpContext.SignInAsync(AuthConstants.Scheme, ClaimsFactory.Create(user));
+                await audit.LogAsync(AuditActions.LoginSucceeded, true, userId: user.Id, userEmail: user.Email, ct: ct);
+                return Url.IsLocalUrl(model.ReturnUrl) ? LocalRedirect(model.ReturnUrl) : RedirectToAction("Index", "Home");
+
+            case LoginStatus.LockedOut:
+                await audit.LogAsync(AuditActions.LoginLockedOut, false, userId: result.User?.Id, userEmail: email, ct: ct);
+                ModelState.AddModelError(string.Empty, "Too many failed attempts. Try again later.");
+                break;
+
+            default:
+                // Same message for unknown, wrong password and inactive accounts to avoid account enumeration.
+                await audit.LogAsync(AuditActions.LoginFailed, false, userId: result.User?.Id, userEmail: email,
+                    details: result.Status == LoginStatus.Inactive ? "Account inactive" : null, ct: ct);
+                ModelState.AddModelError(string.Empty, "Invalid e-mail or password.");
+                break;
         }
 
-        public IActionResult Login() => View();
+        model.Password = string.Empty;
+        return View(model);
+    }
 
-        [HttpPost]
-        public async Task<IActionResult> Login(string email, string password)
-        {
-            var adminEmail = _config["AdminUser:Email"];
-            var adminPassword = _config["AdminUser:Password"];
+    [HttpPost]
+    public async Task<IActionResult> Logout(CancellationToken ct)
+    {
+        await audit.LogAsync(AuditActions.Logout, true, ct: ct);
+        await HttpContext.SignOutAsync(AuthConstants.Scheme);
+        return RedirectToAction(nameof(Login));
+    }
 
-            if (email == adminEmail && password == adminPassword)
-            {
-                var claims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.Name, email),
-                    new Claim("Role", "Admin")
-                };
-
-                var identity = new ClaimsIdentity(claims, "CookieAuth");
-                var principal = new ClaimsPrincipal(identity);
-
-                await HttpContext.SignInAsync("CookieAuth", principal);
-                return RedirectToAction("Logs", "Admin");
-            }
-
-            TempData["Error"] = "Invalid credentials.";
-            return View();
-        }
-
-        public async Task<IActionResult> Logout()
-        {
-            await HttpContext.SignOutAsync("CookieAuth");
-            return RedirectToAction("Login");
-        }
-
-        public IActionResult AccessDenied() => View();
+    [AllowAnonymous]
+    public async Task<IActionResult> AccessDenied(string? returnUrl, CancellationToken ct)
+    {
+        if (User.Identity?.IsAuthenticated == true)
+            await audit.LogAsync(AuditActions.AccessDenied, false, target: returnUrl, ct: ct);
+        return View();
     }
 }

@@ -1,128 +1,76 @@
-﻿@model List<string>
+@model FileListViewModel
 @{
-    Layout = "_AdminLayout";
-    ViewData["Title"] = "List / Download / Delete Files";
+    ViewData["Title"] = Model.ShowAllUsers ? "All Files" : "My Files";
 }
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow-sm secure-card-main">
-                <div class="card-body">
-                    <h2 class="card-title">Files in Bucket</h2>
-                    @if (TempData["Success"] != null)
-                    {
-                        <div class="alert alert-success alert-dark">@TempData["Success"]</div>
-                    }
-                    @if (TempData["Error"] != null)
-                    {
-                        <div class="alert alert-danger alert-dark">@TempData["Error"]</div>
-                    }
-                    <a href="/File/Upload" class="btn btn-outline-primary mb-3">Upload New File</a>
-                    @if (Model == null || !Model.Any())
-                    {
-                        <p class="text-muted">No files uploaded yet.</p>
-                    }
-                    else
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-dark table-striped table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>File Key</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @for (int i = 0; i < Model.Count; i++)
-                                    {
-                                        <tr>
-                                            <td>@(i + 1)</td>
-                                            <td>@Model[i]</td>
-                                            <td>
-                                                <a class="btn btn-outline-success btn-sm" href="@Url.Action("Download", "File", new { key = Model[i] })">Download</a>
-                                                <form method="post" asp-action="Delete" asp-controller="File" asp-route-key="@Model[i]" style="display:inline;">
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm ms-1">Delete</button>
-                                                </form>
-                                                <a asp-action="BackupToGlacier" asp-route-key="@Model[i]" class="btn btn-outline-secondary btn-sm ms-1">Backup Glacier</a>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                </div>
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h2 class="page-title">@ViewData["Title"]</h2>
+        <p class="page-subtitle mb-0">@Model.Files.Count file(s) · @FormatHelpers.Bytes(Model.Files.Sum(f => f.SizeBytes))
+            @if (Model.StatusFilter is { } filter)
+            {
+                <a asp-action="List" asp-route-all="@Model.ShowAllUsers" class="badge @AuditDisplay.StatusBadge(filter) ms-2 text-decoration-none" title="Clear filter">@filter <i class="fas fa-xmark ms-1"></i></a>
+            }
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        @if (Model.CanSeeAllUsers)
+        {
+            <div class="btn-group">
+                <a asp-action="List" asp-route-all="false" class="btn btn-sm @(Model.ShowAllUsers ? "btn-outline-secondary" : "btn-secondary")">My files</a>
+                <a asp-action="List" asp-route-all="true" class="btn btn-sm @(Model.ShowAllUsers ? "btn-secondary" : "btn-outline-secondary")">All users</a>
             </div>
-        </div>
+        }
+        <a asp-action="Upload" class="btn btn-primary btn-sm"><i class="fas fa-cloud-arrow-up me-1"></i>Upload</a>
     </div>
 </div>
 
-<style>
-    /* Dark Theme Adjustments for Table & Buttons */
-    .table-dark {
-        --bs-table-bg: #161b22;
-        --bs-table-striped-bg: #1a2332;
-        --bs-table-striped-color: #ffffff;
-        --bs-table-hover-bg: #2c3e50;
-        --bs-table-hover-color: #ffffff;
-        color: #ffffff;
+<div class="card" data-auto-refresh="@(Model.HasFilesInProgress ? "5" : null)"><div class="card-body p-0">
+    @if (!Model.Files.Any())
+    {
+        <p class="text-muted p-4 mb-0">No files yet.</p>
     }
-
-        .table-dark th {
-            background-color: #1a2332;
-            color: #ffffff;
-            border-color: #2c3e50;
-        }
-
-        .table-dark td {
-            border-color: #2c3e50;
-            color: #ffffff;
-        }
-
-    .btn-outline-success {
-        color: #27ae60;
-        border-color: #27ae60;
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Security</th>
+                        <th class="text-end">Size</th>
+                        @if (Model.ShowAllUsers) { <th>Owner</th> }
+                        <th>Uploaded (UTC)</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var f in Model.Files)
+                    {
+                        <tr>
+                            <td class="text-truncate mw-320"><i class="fas fa-file-lines me-2 text-muted"></i><a asp-action="Details" asp-route-id="@f.Id">@f.FileName</a></td>
+                            <td><span class="badge @AuditDisplay.StatusBadge(f.Status)"><i class="fas @AuditDisplay.StatusIcon(f.Status) me-1"></i>@f.Status</span></td>
+                            <td class="text-end text-nowrap">@FormatHelpers.Bytes(f.SizeBytes)</td>
+                            @if (Model.ShowAllUsers) { <td>@f.OwnerEmail</td> }
+                            <td class="text-nowrap">@f.UploadedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td class="text-end text-nowrap">
+                                @if (f.Status == FileSecurityStatus.Approved)
+                                {
+                                    <a asp-action="Download" asp-route-id="@f.Id" class="btn btn-outline-success btn-sm"><i class="fas fa-download me-1"></i>Download</a>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Only approved files can be downloaded"><i class="fas fa-lock me-1"></i>Download</button>
+                                }
+                                <a asp-action="Details" asp-route-id="@f.Id" class="btn btn-outline-info btn-sm ms-1"><i class="fas fa-circle-info"></i><span class="visually-hidden">Details</span></a>
+                                <form asp-action="Delete" asp-route-id="@f.Id" asp-route-all="@Model.ShowAllUsers" method="post" class="d-inline" data-confirm="Delete this file permanently?">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm ms-1"><i class="fas fa-trash"></i><span class="visually-hidden">Delete</span></button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
-
-        .btn-outline-success:hover {
-            background-color: #27ae60;
-            color: white;
-        }
-
-    .btn-outline-danger {
-        color: #e74c3c;
-        border-color: #e74c3c;
-    }
-
-        .btn-outline-danger:hover {
-            background-color: #e74c3c;
-            color: white;
-        }
-
-    .btn-outline-secondary {
-        color: #95a5a6;
-        border-color: #95a5a6;
-    }
-
-        .btn-outline-secondary:hover {
-            background-color: #95a5a6;
-            color: white;
-        }
-
-    .alert-dark {
-        background-color: #2c3e50;
-        border-color: #34495e;
-        color: #ecf0f1;
-    }
-
-    .secure-card-main {
-        background: linear-gradient(135deg, #161b22, #0d1117);
-        border: 1px solid #2c3e50;
-        color: #ecf0f1;
-    }
-
-        .secure-card-main .card-title {
-            color: #ecf0f1;
-        }
-</style>
+</div></div>
+<p class="text-muted small mt-2">New uploads stay in quarantine until validation approves them. Downloads use pre-signed S3 URLs that expire after a few minutes.</p>

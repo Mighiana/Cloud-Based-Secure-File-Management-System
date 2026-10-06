@@ -1,241 +1,227 @@
-﻿@model SecureFileUploadPortal.Models.AdminDashboardViewModel
+@using System.Globalization
+@model AdminDashboardViewModel
 @{
-    Layout = "_AdminLayout";
-    ViewData["Title"] = "Dashboard Home";
+    ViewData["Title"] = "Admin Dashboard";
+    var total = Enum.GetValues<FileSecurityStatus>().Sum(Model.StatusCount);
+    string Pct(FileSecurityStatus s) => total == 0 ? "0" : Math.Round(Model.StatusCount(s) * 100.0 / total, 1).ToString(CultureInfo.InvariantCulture);
+    var chain = Model.LastChainCheck;
 }
-<div class="container-fluid secure-bg" style="min-height:100vh;">
-    <!-- Top Bar: Time Filter & Quick Actions -->
-    <div class="row mb-3 align-items-center">
-        <div class="col-md-6">
-            <div class="d-flex align-items-center">
-                <h4 class="text-white mb-0 me-3">Security Overview</h4>
-                <select id="timeFilter" class="form-select form-select-sm bg-dark text-white border-0 me-2" style="width: auto;">
-                    <option>Last 24 Hours</option>
-                    <option>Last 7 Days</option>
-                    <option>Last 30 Days</option>
-                    <option>Custom Range</option>
-                </select>
-            </div>
-        </div>
-        <div class="col-md-6 text-end">
-            <div class="btn-group" role="group">
-                <a class="btn btn-outline-primary btn-sm" href="/File/Upload"><i class="fas fa-upload me-1"></i>Upload</a>
-                <a class="btn btn-outline-info btn-sm" href="/File/List"><i class="fas fa-eye me-1"></i>View All</a>
-                <a class="btn btn-outline-secondary btn-sm" href="/Admin/Reports"><i class="fas fa-download me-1"></i>Report</a>
-                <a class="btn btn-outline-warning btn-sm" href="/Admin/Settings"><i class="fas fa-cog me-1"></i>Settings</a>
-            </div>
-        </div>
+@functions {
+    private static string Css(FileSecurityStatus s) => s.ToString().ToLowerInvariant();
+    private static string Hint(FileSecurityStatus s) => s switch
+    {
+        FileSecurityStatus.Pending => "waiting for scan",
+        FileSecurityStatus.Validating => "being scanned",
+        FileSecurityStatus.Approved => "downloadable",
+        FileSecurityStatus.Rejected => "failed checks",
+        _ => "held · not downloadable",
+    };
+}
+@{
+    void Tile(FileSecurityStatus s)
+    {
+        <a href="@Url.Action("List", "File", new { all = true, status = s })" class="flow-tile flow-@Css(s)">
+            <span class="flow-label"><i class="fas @AuditDisplay.StatusIcon(s) me-1"></i>@s</span>
+            <span class="flow-count">@Model.StatusCount(s)</span>
+            <span class="flow-hint">@Hint(s)</span>
+        </a>
+    }
+}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+    <div>
+        <h2 class="page-title">Security overview</h2>
+        <p class="page-subtitle mb-0">Live figures from the SQL Server database and audit log.</p>
     </div>
+    <a asp-action="Integrity" class="btn btn-outline-info btn-sm text-nowrap"><i class="fas fa-link me-1"></i>Verify audit chain</a>
+</div>
 
-    <!-- KPI Cards with Trends -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card text-white mb-3 secure-card-files animate-fade-in">
-                <div class="card-body">
-                    <h5 class="card-title">Files</h5>
-                    <p class="card-text fs-3 fw-bold">@Model.TotalFiles</p>
-                    <small class="text-success"><i class="fas fa-arrow-up me-1"></i>@Model.FilesTrend today</small>
-                    <canvas id="filesTrendChart" height="50" class="mt-2"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-white mb-3 secure-card-alerts animate-fade-in" style="animation-delay: 0.1s;">
-                <div class="card-body">
-                    <h5 class="card-title">Alerts</h5>
-                    <p class="card-text fs-3 fw-bold">@Model.TotalAlerts</p>
-                    <small class="text-success"><i class="fas fa-arrow-down me-1"></i>@Model.AlertsTrend this week</small>
-                    <canvas id="alertsTrendChart" height="50" class="mt-2"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-white mb-3 secure-card-logs animate-fade-in" style="animation-delay: 0.2s;">
-                <div class="card-body">
-                    <h5 class="card-title">CloudTrail Logs</h5>
-                    <p class="card-text fs-3 fw-bold">@(Model.TotalLogs / 1000)k</p>
-                    <small class="text-danger"><i class="fas fa-arrow-up me-1"></i>@Model.LogsTrend today</small>
-                    <canvas id="logsTrendChart" height="50" class="mt-2"></canvas>
-                </div>
-            </div>
-        </div>
+<div class="row g-3 mb-3">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">Users</div><div class="stat-value">@Model.TotalUsers</div><small class="text-muted">@Model.ActiveUsers active</small></div>
+            <i class="fas fa-users stat-icon text-info"></i>
+        </div></div>
     </div>
-
-    <!-- Main Chart & System Status -->
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <div class="card shadow-sm secure-card-main animate-slide-up">
-                <div class="card-body">
-                    <h5 class="card-title">API & Upload Activity</h5>
-                    <canvas id="activityChart" height="200"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm secure-card-status animate-slide-up" style="animation-delay: 0.1s;">
-                <div class="card-body">
-                    <h5 class="card-title" style="color: #ffffff !important; font-weight: bold;">System Status</h5>
-                    <ul class="list-unstyled">
-                        <li class="text-white mb-2"><i class="fas fa-check-circle me-1"></i>CloudTrail: Healthy</li>
-                        <li class="text-white mb-2"><i class="fas fa-check-circle me-1"></i>S3 Bucket: Healthy</li>
-                        <li class="text-white mb-2"><i class="fas fa-check-circle me-1"></i>File Scanner: Healthy</li>
-                        <li class="text-warning mb-2"><i class="fas fa-exclamation-triangle me-1"></i>IAM Policies: Review Pending</li>
-                    </ul>
-                    <hr>
-                    <h6 class="mb-2" style="color: #ffffff !important; font-weight: bold;">User Info</h6>
-                    <p class="mb-1 small text-white">Welcome, @Model.CurrentUser</p>
-                    <p class="mb-0 small text-white">Last Login: @Model.LastLogin.ToString("MMM dd, yyyy HH:mm")</p>
-                </div>
-            </div>
-        </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">Files</div><div class="stat-value">@Model.TotalFiles</div><small class="text-muted">@FormatHelpers.Bytes(Model.StorageBytes) in S3</small></div>
+            <i class="fas fa-file stat-icon text-primary"></i>
+        </div></div>
     </div>
-
-    <!-- Recent Files, Alerts Feed, Top Users -->
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card shadow-sm secure-card-recent animate-slide-up" style="animation-delay: 0.2s; background: #161b22 !important; border: 1px solid #2c3e50 !important;">
-                <div class="card-body">
-                    <h5 class="card-title" style="color: #ffffff !important; font-weight: bold;">Recent Files</h5>
-                    <div class="list-group list-group-flush">
-                        @if (Model.RecentFiles.Any())
-                        {
-                            @foreach (var file in Model.RecentFiles.Take(5))
-                            {
-                                <div class="list-group-item px-0 border-0" style="background-color: #1a2332 !important; color: #ffffff !important;">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <small class="text-white text-truncate d-block" style="max-width: 150px;">@file.FileName</small>
-                                        <span class="badge bg-success">@file.Status</span>
-                                    </div>
-                                    <small class="text-white">by @file.User | @file.UploadTime.ToString("HH:mm")</small>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <p class="text-white">No recent files.</p>
-                        }
-                    </div>
-                    <a href="/File/List" class="btn btn-outline-primary btn-sm mt-2">View All Files</a>
-                </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-label">Validation queue</div>
+                <div class="stat-value">@Model.ValidationQueue</div>
+                <small class="text-muted">@(Model.OldestQueuedUtc is { } oldest ? $"oldest {FormatHelpers.Ago(oldest, Model.NowUtc)}" : "empty")</small>
             </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm secure-card-alerts-feed animate-slide-up" style="animation-delay: 0.3s; background: #161b22 !important; border: 1px solid #2c3e50 !important;">
-                <div class="card-body">
-                    <h5 class="card-title" style="color: #ffffff !important; font-weight: bold;">Security Alerts Feed</h5>
-                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
-                        @if (Model.Alerts.Any())
-                        {
-                            @foreach (var alert in Model.Alerts.Take(5))
-                            {
-                                <div class="list-group-item px-0 border-0" style="background-color: #1a2332 !important; color: #ffffff !important;">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div>
-                                            <span class="badge bg-@(alert.Severity == "Critical" ? "danger" : alert.Severity == "High" ? "warning" : "info")">@alert.Severity</span>
-                                            <small class="text-white ms-2">@alert.Message</small>
-                                        </div>
-                                        <small class="text-white">@alert.Time.ToString("HH:mm")</small>
-                                    </div>
-                                    <small class="text-white d-block mt-1">@alert.Status</small>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <div class="text-center text-white py-3">
-                                <i class="fas fa-shield-alt fa-2x mb-2"></i>
-                                <p>All systems normal.</p>
-                            </div>
-                        }
-                    </div>
-                    <a href="/Admin/Alerts" class="btn btn-outline-info btn-sm mt-2">View Full Logs</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm secure-card-users animate-slide-up" style="animation-delay: 0.4s; background: #161b22 !important; border: 1px solid #2c3e50 !important;">
-                <div class="card-body">
-                    <h5 class="card-title" style="color: #ffffff !important; font-weight: bold;">Top Users</h5>
-                    <div class="list-group list-group-flush">
-                        @if (Model.TopUsers.Any())
-                        {
-                            @foreach (var user in Model.TopUsers.Take(5))
-                            {
-                                <div class="list-group-item px-0 border-0 d-flex justify-content-between align-items-center" style="background-color: #1a2332 !important; color: #ffffff !important;">
-                                    <small class="text-white">@user.UserName</small>
-                                    <span class="badge bg-primary">@user.ActivityCount</span>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <p class="text-white">No user activity.</p>
-                        }
-                    </div>
-                    <a href="/Admin/Users" class="btn btn-outline-secondary btn-sm mt-2">View Report</a>
-                </div>
-            </div>
-        </div>
+            <i class="fas fa-hourglass-half stat-icon text-info"></i>
+        </div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
+            <div><div class="stat-label">Failed sign-ins (24h)</div><div class="stat-value @(Model.FailedLogins24h > 0 ? "text-danger" : "")">@Model.FailedLogins24h</div><small class="text-muted">@Model.FailedLogins7d in 7 days · incl. lockouts</small></div>
+            <i class="fas fa-user-lock stat-icon text-danger"></i>
+        </div></div>
     </div>
 </div>
 
-<!-- Chart.js Integration -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    // Sample Data for Charts
-    const ctxFiles = document.getElementById('filesTrendChart').getContext('2d');
-    new Chart(ctxFiles, {
-        type: 'line',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-            datasets: [{ data: [1, 2, 1, 3, 2], borderColor: '#3498db', tension: 0.4, fill: false, pointRadius: 0, borderWidth: 2 }]
-        },
-        options: {
-            scales: { y: { display: false }, x: { display: false } },
-            plugins: { legend: { display: false } },
-            elements: { point: { radius: 0 } }
-        }
-    });
+<div class="row g-3 mb-3">
+    <div class="col-xl-8">
+        <div class="card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title mb-0"><i class="fas fa-shield-virus me-2"></i>File security pipeline</h5>
+                <span class="text-muted small">@total file(s)</span>
+            </div>
+            <div class="pipeline-bar mb-3" role="img" aria-label="Files by security state">
+                @foreach (var s in Enum.GetValues<FileSecurityStatus>().Where(s => Model.StatusCount(s) > 0))
+                {
+                    <span class="seg seg-@Css(s)" data-pct="@Pct(s)" title="@s: @Model.StatusCount(s)"></span>
+                }
+            </div>
+            <div class="pipeline-flow">
+                @{ Tile(FileSecurityStatus.Pending); }
+                <i class="fas fa-chevron-right flow-arrow"></i>
+                @{ Tile(FileSecurityStatus.Validating); }
+                <i class="fas fa-chevron-right flow-arrow"></i>
+                <div class="flow-outcomes">
+                    @{ Tile(FileSecurityStatus.Approved); Tile(FileSecurityStatus.Rejected); Tile(FileSecurityStatus.Quarantined); }
+                </div>
+            </div>
+            <p class="text-muted small mt-3 mb-0"><i class="fas fa-lock me-1"></i>Only <strong>Approved</strong> files in the approved bucket can be downloaded.</p>
+        </div></div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title mb-3"><i class="fas fa-heart-pulse me-2"></i>Controls</h5>
+            <ul class="posture list-unstyled mb-0">
+                <li>
+                    <i class="fas fa-link posture-icon @(chain is null ? "text-muted" : chain.Succeeded ? "text-success" : "text-danger")"></i>
+                    <div class="flex-grow-1">
+                        <div class="posture-label">Audit chain</div>
+                        @if (chain is null)
+                        {
+                            <span class="text-muted">Not verified yet</span>
+                        }
+                        else
+                        {
+                            <span class="@(chain.Succeeded ? "text-success" : "text-danger") fw-semibold">@(chain.Succeeded ? "Intact" : "Broken")</span>
+                            <span class="text-muted small">· @FormatHelpers.Ago(chain.TimestampUtc, Model.NowUtc)</span>
+                        }
+                    </div>
+                </li>
+                <li>
+                    <i class="fas fa-magnifying-glass posture-icon text-info"></i>
+                    <div class="flex-grow-1">
+                        <div class="posture-label">Scanners <span class="text-muted">· fail-closed</span></div>
+                        @foreach (var name in Model.Scanners)
+                        {
+                            <span class="badge bg-secondary me-1">@name</span>
+                        }
+                    </div>
+                </li>
+                <li>
+                    <i class="fas fa-gears posture-icon @(Model.WorkerEnabled ? "text-success" : "text-warning")"></i>
+                    <div class="flex-grow-1">
+                        <div class="posture-label">Validation worker</div>
+                        <span>@(Model.WorkerEnabled ? "Running in this instance" : "Disabled on this instance")</span>
+                    </div>
+                </li>
+            </ul>
+            <div class="row g-2 mt-1 text-center">
+                <div class="col-4"><div class="mini-stat"><div class="mini-value @(Model.BlockedDownloads7d > 0 ? "text-warning" : "")">@Model.BlockedDownloads7d</div><div class="mini-label">blocked downloads</div></div></div>
+                <div class="col-4"><div class="mini-stat"><div class="mini-value @(Model.UploadRejections7d > 0 ? "text-warning" : "")">@Model.UploadRejections7d</div><div class="mini-label">rejected uploads</div></div></div>
+                <div class="col-4"><div class="mini-stat"><div class="mini-value @(Model.ScanFailures7d > 0 ? "text-danger" : "")">@Model.ScanFailures7d</div><div class="mini-label">scan failures</div></div></div>
+            </div>
+            <div class="text-muted small text-end mt-1">last 7 days</div>
+        </div></div>
+    </div>
+</div>
 
-    const ctxAlerts = document.getElementById('alertsTrendChart').getContext('2d');
-    new Chart(ctxAlerts, {
-        type: 'line',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-            datasets: [{ data: [5, 3, 2, 1, 0], borderColor: '#e74c3c', tension: 0.4, fill: false, pointRadius: 0, borderWidth: 2 }]
-        },
-        options: {
-            scales: { y: { display: false }, x: { display: false } },
-            plugins: { legend: { display: false } },
-            elements: { point: { radius: 0 } }
-        }
-    });
+<div class="row g-3 mb-3">
+    <div class="col-xl-8">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">Activity – last 7 days</h5>
+            <div class="chart-box"><canvas id="activityChart" data-days="@System.Text.Json.JsonSerializer.Serialize(Model.Last7Days, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))"></canvas></div>
+        </div></div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0">Recent security events</h5>
+                <a asp-action="Audit" asp-route-succeeded="false" class="small text-nowrap">View all</a>
+            </div>
+            @if (!Model.RecentSecurityEvents.Any())
+            {
+                <p class="text-muted mb-0">No failed or blocked actions recorded.</p>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush list-dark">
+                    @foreach (var e in Model.RecentSecurityEvents)
+                    {
+                        <li class="list-group-item px-0">
+                            <div class="d-flex flex-wrap justify-content-between gap-1"><partial name="_AuditRow" model="e" /><span class="text-muted small text-nowrap">@FormatHelpers.Ago(e.TimestampUtc, Model.NowUtc)</span></div>
+                            <small class="text-muted text-truncate d-block">@e.UserEmail · @e.Target</small>
+                        </li>
+                    }
+                </ul>
+            }
+        </div></div>
+    </div>
+</div>
 
-    const ctxLogs = document.getElementById('logsTrendChart').getContext('2d');
-    new Chart(ctxLogs, {
-        type: 'line',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-            datasets: [{ data: [100, 150, 200, 180, 241], borderColor: '#95a5a6', tension: 0.4, fill: false, pointRadius: 0, borderWidth: 2 }]
-        },
-        options: {
-            scales: { y: { display: false }, x: { display: false } },
-            plugins: { legend: { display: false } },
-            elements: { point: { radius: 0 } }
-        }
-    });
+<div class="row g-3">
+    <div class="col-xl-7">
+        <div class="card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0">Recent audit events <span class="text-muted small fw-normal">· @Model.Events24h in 24h</span></h5>
+                <a asp-action="Audit" class="btn btn-outline-info btn-sm text-nowrap">Full audit log</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <tbody>
+                        @foreach (var a in Model.RecentEvents)
+                        {
+                            <tr>
+                                <td class="text-nowrap text-muted small">@a.TimestampUtc.ToString("MMM dd HH:mm:ss")</td>
+                                <td><partial name="_AuditRow" model="a" /></td>
+                                <td class="text-truncate mw-180">@a.UserEmail</td>
+                                <td class="text-truncate text-muted small mw-200">@a.Target</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+    <div class="col-xl-5">
+        <div class="card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0">Latest uploads</h5>
+                <a asp-controller="File" asp-action="List" asp-route-all="true" class="btn btn-outline-primary btn-sm text-nowrap">All files</a>
+            </div>
+            @if (!Model.RecentFiles.Any())
+            {
+                <p class="text-muted mb-0">No files uploaded.</p>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush list-dark">
+                    @foreach (var f in Model.RecentFiles)
+                    {
+                        <li class="list-group-item px-0">
+                            <div class="d-flex justify-content-between"><a asp-controller="File" asp-action="Details" asp-route-id="@f.Id" class="text-truncate me-2">@f.FileName</a><span class="badge @AuditDisplay.StatusBadge(f.Status)">@f.Status</span></div>
+                            <small class="text-muted">@f.OwnerEmail · @FormatHelpers.Bytes(f.SizeBytes) · @FormatHelpers.Ago(f.UploadedAtUtc, Model.NowUtc)</small>
+                        </li>
+                    }
+                </ul>
+            }
+        </div></div>
+    </div>
+</div>
 
-    const ctxActivity = document.getElementById('activityChart').getContext('2d');
-    new Chart(ctxActivity, {
-        type: 'line',
-        data: {
-            labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
-            datasets: [
-                { label: 'Uploads', data: [12, 19, 3, 5, 2, 3], borderColor: 'rgba(52, 152, 219, 1)', backgroundColor: 'rgba(52, 152, 219, 0.2)', tension: 0.4 },
-                { label: 'Logins', data: [2, 15, 8, 10, 6, 4], borderColor: 'rgba(39, 174, 96, 1)', backgroundColor: 'rgba(39, 174, 96, 0.2)', tension: 0.4 },
-                { label: 'Errors', data: [1, 0, 2, 1, 0, 0], borderColor: 'rgba(231, 76, 60, 1)', backgroundColor: 'rgba(231, 76, 60, 0.2)', tension: 0.4 }
-            ]
-        },
-        options: { responsive: true, scales: { y: { beginAtZero: true } } }
-    });
-</script>
+@section Scripts {
+    <script src="~/lib/chartjs/chart.umd.min.js"></script>
+    <script src="~/js/admin-dashboard.js" asp-append-version="true"></script>
+}

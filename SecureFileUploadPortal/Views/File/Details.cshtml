@@ -1,0 +1,85 @@
+@model FileDetailsViewModel
+@{
+    var f = Model.File;
+    ViewData["Title"] = f.OriginalFileName;
+    var inProgress = f.Status is FileSecurityStatus.Pending or FileSecurityStatus.Validating;
+}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2" data-auto-refresh="@(inProgress ? "4" : null)">
+    <div>
+        <h2 class="page-title text-break">@f.OriginalFileName</h2>
+        <p class="page-subtitle mb-0">
+            <span class="badge fs-6 @AuditDisplay.StatusBadge(f.Status)"><i class="fas @AuditDisplay.StatusIcon(f.Status) me-1"></i>@f.Status</span>
+            @if (!string.IsNullOrEmpty(f.StatusReason)) { <span class="ms-2">@f.StatusReason</span> }
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        @if (f.IsDownloadable)
+        {
+            <a asp-action="Download" asp-route-id="@f.Id" class="btn btn-success btn-sm"><i class="fas fa-download me-1"></i>Download</a>
+        }
+        else
+        {
+            <button type="button" class="btn btn-outline-secondary btn-sm" disabled><i class="fas fa-lock me-1"></i>Download blocked until approved</button>
+        }
+        @if (Model.ShowStorageKey && f.Status == FileSecurityStatus.Quarantined && f.StorageArea == StorageArea.Quarantine)
+        {
+            <form asp-controller="Admin" asp-action="Rescan" asp-route-id="@f.Id" method="post">
+                <button type="submit" class="btn btn-outline-warning btn-sm"><i class="fas fa-rotate me-1"></i>Re-scan</button>
+            </form>
+        }
+        <a asp-action="List" class="btn btn-outline-secondary btn-sm">Back</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title"><i class="fas fa-file-shield me-2"></i>File</h5>
+            <dl class="row mb-0 small">
+                <dt class="col-5">Owner</dt><dd class="col-7 text-break">@Model.OwnerEmail</dd>
+                <dt class="col-5">Size</dt><dd class="col-7">@FormatHelpers.Bytes(f.SizeBytes)</dd>
+                <dt class="col-5">Content type</dt><dd class="col-7 mono">@f.ContentType</dd>
+                <dt class="col-5">Uploaded (UTC)</dt><dd class="col-7">@f.UploadedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</dd>
+                <dt class="col-5">SHA-256</dt><dd class="col-7 mono text-break">@f.Sha256</dd>
+                <dt class="col-5">Storage</dt><dd class="col-7">Amazon S3 · @(f.StorageArea == StorageArea.Approved ? "approved bucket" : "quarantine bucket")</dd>
+                @if (Model.ShowStorageKey)
+                {
+                    <dt class="col-5">Object key</dt><dd class="col-7 mono text-break">@f.StorageKey</dd>
+                }
+            </dl>
+            <p class="text-muted small mt-3 mb-0">The SHA-256 digest is integrity metadata: it shows the stored bytes are the bytes that were uploaded. It does not prove who created the file.</p>
+        </div></div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title"><i class="fas fa-shield-virus me-2"></i>Validation</h5>
+            <dl class="row mb-0 small">
+                <dt class="col-4">Status</dt><dd class="col-8">@f.Status</dd>
+                <dt class="col-4">Result</dt><dd class="col-8">@(f.StatusReason ?? "waiting for the validator")</dd>
+                <dt class="col-4">Engines</dt><dd class="col-8">@(f.ScanEngine ?? "—")</dd>
+                <dt class="col-4">Attempts</dt><dd class="col-8">@f.ValidationAttempts</dd>
+                <dt class="col-4">Completed (UTC)</dt><dd class="col-8">@(f.ValidatedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</dd>
+            </dl>
+        </div></div>
+    </div>
+</div>
+
+<div class="card mt-3"><div class="card-body">
+    <h5 class="card-title"><i class="fas fa-list-check me-2"></i>Audit history</h5>
+    <div class="table-responsive">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Time (UTC)</th><th>Event</th><th>Actor</th><th>Details</th></tr></thead>
+            <tbody>
+                @foreach (var a in Model.History)
+                {
+                    <tr>
+                        <td class="text-nowrap text-muted small">@a.TimestampUtc.ToString("MMM dd HH:mm:ss")</td>
+                        <td class="text-nowrap"><partial name="_AuditRow" model="a" /></td>
+                        <td class="text-nowrap small">@a.UserEmail</td>
+                        <td class="text-muted small text-break w-100">@a.Details</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div></div>

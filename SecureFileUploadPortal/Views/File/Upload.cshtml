@@ -1,36 +1,27 @@
-﻿@{
-    Layout = "_AdminLayout";
-    ViewData["Title"] = "Upload File";
+@model UploadViewModel
+@{
+    ViewData["Title"] = "Upload";
 }
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow-sm secure-card-main">
-                <div class="card-body">
-                    <h2 class="card-title">Upload File</h2>
-                    @if (TempData["Success"] != null)
-                    {
-                        <div class="alert alert-success">@TempData["Success"]</div>
-                    }
-                    @if (TempData["ScanResult"] != null)
-                    {
-                        <div class="alert alert-success">@TempData["ScanResult"]</div>
-                    }
-                    @if (TempData["Error"] != null)
-                    {
-                        <div class="alert alert-danger">@TempData["Error"]</div>
-                    }
-                    <div class="card p-4">
-                        <form asp-action="Upload" method="post" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label for="file" class="form-label">Select file to upload:</label>
-                                <input type="file" class="form-control" name="file" id="file" required />
-                            </div>
-                            <button type="submit" class="btn btn-primary">Upload</button>
-                        </form>
-                    </div>
-                </div>
+<h2 class="page-title">Upload a file</h2>
+<p class="page-subtitle">Files are checked, stored in a private quarantine bucket and scanned. Download is enabled only after the file is approved.</p>
+
+<div class="card mw-640">
+    <div class="card-body">
+        <form asp-action="Upload" method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="file" class="form-label">File</label>
+                <input type="file" class="form-control" name="file" id="file" required accept="@string.Join(",", Model.AllowedExtensions)" />
+                <div class="form-text">Max @Model.MaxFileSizeMB MB · Allowed: @string.Join(", ", Model.AllowedExtensions)</div>
             </div>
-        </div>
+            <ol class="pipeline small text-muted mb-3">
+                <li><i class="fas fa-ruler me-1"></i>Size, type &amp; file signature</li>
+                <li><i class="fas fa-fingerprint me-1"></i>SHA-256</li>
+                <li><i class="fas fa-box-archive me-1"></i>Quarantine</li>
+                <li><i class="fas fa-shield-virus me-1"></i>Scan</li>
+                <li><i class="fas fa-circle-check me-1"></i>Approved</li>
+            </ol>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-cloud-arrow-up me-1"></i>Upload</button>
+            <a asp-action="List" class="btn btn-outline-secondary ms-2">Cancel</a>
+        </form>
     </div>
 </div>

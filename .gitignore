@@ -1,7 +1,33 @@
-﻿# Ignore build output
-/bin
-/obj
-/.vs
+# Build output
+bin/
+obj/
+out/
+publish/
+TestResults/
 
-# Ignore sensitive files
-appsettings.json
+# IDE / user files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Local secrets and environment files (use dotnet user-secrets or environment variables)
+appsettings.*.local.json
+appsettings.Production.json
+.env
+secrets.json
+
+# Runtime artefacts
+*.log
+
+# Python / Terraform
+__pycache__/
+.pytest_cache/
+.terraform/
+*.tfstate
+*.tfstate.*
+deploy/aws/build/
+
+# Pinned dev tools (make bootstrap)
+.tools/
