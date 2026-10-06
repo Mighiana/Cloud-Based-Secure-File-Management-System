@@ -70,6 +70,10 @@ Screenshots of the original 2025 coursework UI are kept in
 
 ## Architecture
 
+![Architecture: user, application, auth/role control, S3, SQL Server, audit logging](docs/architecture.png)
+
+<details><summary>Mermaid version</summary>
+
 ```mermaid
 flowchart LR
     U([User / Browser]) -->|HTTPS| APP[ASP.NET Core 8 MVC]
@@ -80,6 +84,8 @@ flowchart LR
     AUDIT --- SQL
     CT[(CloudTrail bucket)] -.->|read-only, admins| APP
 ```
+
+</details>
 
 ```mermaid
 erDiagram

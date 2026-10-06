@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" font-family="Segoe UI, system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa7b4"/></marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a2332"/><stop offset="1" stop-color="#0d1117"/></linearGradient>
+  </defs>
+  <rect width="1200" height="560" fill="url(#bg)"/>
+  <text x="40" y="52" fill="#e6edf3" font-size="26" font-weight="700">Secure File Portal — architecture</text>
+  <text x="40" y="80" fill="#9aa7b4" font-size="15">ASP.NET Core 8 MVC · Amazon S3 · SQL Server (EF Core) · application audit log</text>
+
+  <g font-size="15" fill="#e6edf3">
+    <!-- User -->
+    <rect x="40" y="220" width="150" height="90" rx="14" fill="#161b22" stroke="#00c3ff" stroke-width="2"/>
+    <text x="115" y="260" text-anchor="middle" font-weight="700" font-size="17">USER</text>
+    <text x="115" y="284" text-anchor="middle" fill="#9aa7b4" font-size="13">Browser · HTTPS</text>
+
+    <!-- App -->
+    <rect x="240" y="200" width="200" height="130" rx="14" fill="#161b22" stroke="#3498db" stroke-width="2"/>
+    <text x="340" y="240" text-anchor="middle" font-weight="700" font-size="17">APPLICATION</text>
+    <text x="340" y="264" text-anchor="middle" fill="#9aa7b4" font-size="13">ASP.NET Core 8 MVC</text>
+    <text x="340" y="284" text-anchor="middle" fill="#9aa7b4" font-size="13">Razor + Bootstrap</text>
+    <text x="340" y="304" text-anchor="middle" fill="#9aa7b4" font-size="13">antiforgery · rate limit</text>
+
+    <!-- Auth -->
+    <rect x="490" y="180" width="230" height="170" rx="14" fill="#161b22" stroke="#f39c12" stroke-width="2"/>
+    <text x="605" y="216" text-anchor="middle" font-weight="700" font-size="17">AUTH / ROLE CONTROL</text>
+    <text x="605" y="242" text-anchor="middle" fill="#9aa7b4" font-size="13">Cookie auth · PBKDF2 hashes</text>
+    <text x="605" y="262" text-anchor="middle" fill="#9aa7b4" font-size="13">Admin / User roles</text>
+    <text x="605" y="282" text-anchor="middle" fill="#9aa7b4" font-size="13">default-deny policy</text>
+    <text x="605" y="302" text-anchor="middle" fill="#9aa7b4" font-size="13">owner-only file access</text>
+    <text x="605" y="322" text-anchor="middle" fill="#9aa7b4" font-size="13">lockout · security stamp</text>
+
+    <!-- S3 -->
+    <rect x="800" y="110" width="220" height="100" rx="14" fill="#161b22" stroke="#27ae60" stroke-width="2"/>
+    <text x="910" y="146" text-anchor="middle" font-weight="700" font-size="17">AWS S3</text>
+    <text x="910" y="170" text-anchor="middle" fill="#9aa7b4" font-size="13">random keys · SSE-KMS</text>
+    <text x="910" y="190" text-anchor="middle" fill="#9aa7b4" font-size="13">pre-signed downloads (15 min)</text>
+
+    <!-- SQL -->
+    <rect x="800" y="240" width="220" height="100" rx="14" fill="#161b22" stroke="#00c3ff" stroke-width="2"/>
+    <text x="910" y="276" text-anchor="middle" font-weight="700" font-size="17">SQL SERVER</text>
+    <text x="910" y="300" text-anchor="middle" fill="#9aa7b4" font-size="13">EF Core 8 migrations</text>
+    <text x="910" y="320" text-anchor="middle" fill="#9aa7b4" font-size="13">Users · FileRecords</text>
+
+    <!-- Audit -->
+    <rect x="800" y="370" width="220" height="100" rx="14" fill="#161b22" stroke="#e74c3c" stroke-width="2"/>
+    <text x="910" y="406" text-anchor="middle" font-weight="700" font-size="17">AUDIT LOGGING</text>
+    <text x="910" y="430" text-anchor="middle" fill="#9aa7b4" font-size="13">AuditLogs table</text>
+    <text x="910" y="450" text-anchor="middle" fill="#9aa7b4" font-size="13">who · what · IP · outcome</text>
+
+    <!-- CloudTrail -->
+    <rect x="240" y="410" width="200" height="80" rx="14" fill="#161b22" stroke="#6c7a89" stroke-width="2" stroke-dasharray="6 5"/>
+    <text x="340" y="444" text-anchor="middle" font-weight="700" font-size="15">CloudTrail bucket</text>
+    <text x="340" y="466" text-anchor="middle" fill="#9aa7b4" font-size="13">read-only viewer (admin)</text>
+  </g>
+
+  <g stroke="#9aa7b4" stroke-width="2" fill="none" marker-end="url(#a)">
+    <line x1="190" y1="265" x2="236" y2="265"/>
+    <line x1="440" y1="265" x2="486" y2="265"/>
+    <path d="M720 230 C760 230 760 160 796 160"/>
+    <line x1="720" y1="282" x2="796" y2="288"/>
+    <path d="M720 330 C760 330 760 420 796 420"/>
+    <path d="M340 410 L340 334" stroke-dasharray="6 5"/>
+  </g>
+  <g stroke="#9aa7b4" stroke-width="2" fill="none" stroke-dasharray="4 4">
+    <path d="M1020 420 L1080 420 L1080 290 L1024 290" marker-end="url(#a)"/>
+  </g>
+  <g font-size="12" fill="#9aa7b4">
+    <text x="726" y="150">file bytes</text>
+    <text x="732" y="276">metadata</text>
+    <text x="736" y="400">every action</text>
+    <text x="1088" y="360">stored in</text>
+    <text x="1088" y="376">SQL Server</text>
+  </g>
+  <text x="40" y="535" fill="#6c7a89" font-size="12">Local demo: Docker Compose with SQL Server 2022 and LocalStack S3. Production: AWS S3 + KMS, credentials from IAM role / default chain.</text>
+</svg>
