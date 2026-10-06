@@ -1,0 +1,67 @@
+# Local demo stack: ASP.NET Core app + SQL Server + LocalStack (S3-compatible).
+# Usage: cp .env.example .env  (edit values)  &&  docker compose up --build
+# Not a production deployment - see README "Deploying to AWS".
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  s3:
+    image: localstack/localstack:3.8
+    environment:
+      SERVICES: s3
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./deploy/localstack/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal s3api head-bucket --bucket secure-files && awslocal s3api head-bucket --bucket demo-cloudtrail"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  app:
+    build: .
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=SecureFilePortal;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+      Database__ApplyMigrationsOnStartup: "true"
+      Storage__BucketName: secure-files
+      Storage__ServiceUrl: http://s3:4566
+      Storage__PublicServiceUrl: http://localhost:4566
+      Storage__ForcePathStyle: "true"
+      Storage__ServerSideEncryption: AES256
+      CloudTrail__BucketName: demo-cloudtrail
+      CloudTrail__AccountId: "000000000000"
+      # LocalStack accepts any credentials; real AWS should use an IAM role instead.
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      Seed__AdminEmail: ${SEED_ADMIN_EMAIL:?Set SEED_ADMIN_EMAIL in .env}
+      Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:?Set SEED_ADMIN_PASSWORD in .env}
+      UseHttpsRedirection: "false"
+      DataProtection__KeysPath: /keys
+    volumes:
+      - dpkeys:/keys
+
+volumes:
+  sqldata:
+  dpkeys:

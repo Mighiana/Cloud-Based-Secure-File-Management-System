@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/.vs/
+.git/
+.env
+Images/
+docs/
+*.md
+SecureFileUploadPortal.Tests/
