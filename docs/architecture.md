@@ -62,8 +62,10 @@ stateDiagram-v2
    generated, `DownloadBlockedSecurityState` is audited and the user sees the file's state.
    `GetApprovedDownloadUrl` can only sign URLs for the approved bucket.
 
-The worker runs inside the web process by default (`Validation:RunWorker`). It can be split
-into its own process with its own IAM role (`validator_in_web_process = false` in Terraform).
+The worker runs inside the web process and uses the web app's credentials; Terraform attaches
+the worker policy to the web role. There is no separate worker deployment or validator IAM role.
+`Validation:RunWorker=false` only turns validation off on an instance (e.g. extra replicas).
+Retries are scheduled in SQL Server (`ValidationAttempts`, `NextAttemptAtUtc`), not in a queue.
 
 ### Upload sequence
 
@@ -104,7 +106,8 @@ on each upload and sent "scan successful / failed" e-mails through SNS. It was b
 console and its code was never committed. [`lambda/upload-scan`](../lambda/upload-scan) is a
 2026 reconstruction, deployed by [`deploy/aws`](../deploy/aws) on the quarantine bucket:
 size / extension / signature checks, `scan-status` and `scan-etag` object tags, SNS alerts,
-duplicate-event suppression, SQS dead-letter queue. It is an independent alerting path: the
+duplicate-event suppression, SQS dead-letter queue (the only use of SQS; LocalStack also
+uses an SQS queue as the alert inbox instead of e-mail). It is an independent alerting path: the
 web application does not read its tags, and approval is decided only by the worker.
 
 ## Components
@@ -227,9 +230,9 @@ them.
 | File | Contents |
 |---|---|
 | `storage.tf` | quarantine, approved and access-log buckets: Public Access Block, `BucketOwnerEnforced`, versioning, SSE-S3 (or SSE-KMS with `kms_key_arn`), lifecycle (expire quarantine objects and old versions, abort incomplete multipart uploads), server access logging, TLS-only + TLS ≥ 1.2 bucket policies |
-| `iam.tf` | separate roles: **web** (put/delete quarantine, get/delete approved, optional CloudTrail read), **validator** (get/delete/tag quarantine, put approved), optional KMS statements |
+| `iam.tf` | **web** role with two policies: app (put/delete quarantine, get/delete approved, optional CloudTrail read) and validation worker (get/delete/tag quarantine, put/tag approved), since the worker runs in the web process; optional KMS statements. The Lambda role is in `upload_scan.tf` |
 | `upload_scan.tf` | Lambda (Python 3.12, reserved concurrency, async retry config, SQS DLQ, log group with retention), SNS topic + optional e-mail subscriptions, quarantine-bucket notification, Lambda role (get/tag quarantine, publish SNS, send DLQ, own logs) |
-| `tests/security.tftest.hcl` | `terraform test` with a mocked AWS provider: private/versioned/encrypted buckets, TLS-only policies, no wildcard IAM actions/resources, web role cannot write to approved, SSE-KMS switch, Lambda toggle, input validation |
+| `tests/security.tftest.hcl` | `terraform test` with a mocked AWS provider: private/versioned/encrypted buckets, TLS-only policies, no `*`/`service:*` actions and no `Resource: "*"`, Lambda role has no access to the approved bucket, SSE-KMS switch, Lambda toggle, input validation |
 
 `make check` runs `terraform fmt -check`, `validate`, `test`, TFLint and Checkov without AWS
 credentials. Checkov skips are written inline with a reason (e.g. cross-region replication

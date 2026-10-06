@@ -39,15 +39,9 @@ variable "cloudtrail_bucket_name" {
 }
 
 variable "app_trusted_services" {
-  description = "AWS service principals allowed to assume the portal and validator roles (where the app runs)."
+  description = "AWS service principals allowed to assume the portal role (where the app runs)."
   type        = list(string)
   default     = ["ecs-tasks.amazonaws.com"]
-}
-
-variable "validator_in_web_process" {
-  description = "The portal runs the validation worker in-process by default (Validation:RunWorker=true), so the web role also gets the validator policy. Set false when the worker runs separately under the validator role."
-  type        = bool
-  default     = true
 }
 
 variable "enable_upload_scan_lambda" {

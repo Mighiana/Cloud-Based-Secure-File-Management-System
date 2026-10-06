@@ -1,11 +1,41 @@
+@using System.Globalization
 @model AdminDashboardViewModel
 @{
     ViewData["Title"] = "Admin Dashboard";
+    var total = Enum.GetValues<FileSecurityStatus>().Sum(Model.StatusCount);
+    string Pct(FileSecurityStatus s) => total == 0 ? "0" : Math.Round(Model.StatusCount(s) * 100.0 / total, 1).ToString(CultureInfo.InvariantCulture);
+    var chain = Model.LastChainCheck;
 }
-<h2 class="page-title">Security overview</h2>
-<p class="page-subtitle">Live figures from the SQL Server database and audit log.</p>
+@functions {
+    private static string Css(FileSecurityStatus s) => s.ToString().ToLowerInvariant();
+    private static string Hint(FileSecurityStatus s) => s switch
+    {
+        FileSecurityStatus.Pending => "waiting for scan",
+        FileSecurityStatus.Validating => "being scanned",
+        FileSecurityStatus.Approved => "downloadable",
+        FileSecurityStatus.Rejected => "failed checks",
+        _ => "held · not downloadable",
+    };
+}
+@{
+    void Tile(FileSecurityStatus s)
+    {
+        <a href="@Url.Action("List", "File", new { all = true, status = s })" class="flow-tile flow-@Css(s)">
+            <span class="flow-label"><i class="fas @AuditDisplay.StatusIcon(s) me-1"></i>@s</span>
+            <span class="flow-count">@Model.StatusCount(s)</span>
+            <span class="flow-hint">@Hint(s)</span>
+        </a>
+    }
+}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+    <div>
+        <h2 class="page-title">Security overview</h2>
+        <p class="page-subtitle mb-0">Live figures from the SQL Server database and audit log.</p>
+    </div>
+    <a asp-action="Integrity" class="btn btn-outline-info btn-sm text-nowrap"><i class="fas fa-link me-1"></i>Verify audit chain</a>
+</div>
 
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-3">
     <div class="col-sm-6 col-xl-3">
         <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
             <div><div class="stat-label">Users</div><div class="stat-value">@Model.TotalUsers</div><small class="text-muted">@Model.ActiveUsers active</small></div>
@@ -20,53 +50,106 @@
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
-            <div><div class="stat-label">Audit events (24h)</div><div class="stat-value">@Model.Events24h</div><small class="text-muted">all actions</small></div>
-            <i class="fas fa-list-check stat-icon text-success"></i>
+            <div>
+                <div class="stat-label">Validation queue</div>
+                <div class="stat-value">@Model.ValidationQueue</div>
+                <small class="text-muted">@(Model.OldestQueuedUtc is { } oldest ? $"oldest {FormatHelpers.Ago(oldest, Model.NowUtc)}" : "empty")</small>
+            </div>
+            <i class="fas fa-hourglass-half stat-icon text-info"></i>
         </div></div>
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between align-items-center">
-            <div><div class="stat-label">Failed sign-ins (24h)</div><div class="stat-value @(Model.FailedLogins24h > 0 ? "text-danger" : "")">@Model.FailedLogins24h</div><small class="text-muted">incl. lockouts</small></div>
+            <div><div class="stat-label">Failed sign-ins (24h)</div><div class="stat-value @(Model.FailedLogins24h > 0 ? "text-danger" : "")">@Model.FailedLogins24h</div><small class="text-muted">@Model.FailedLogins7d in 7 days · incl. lockouts</small></div>
             <i class="fas fa-user-lock stat-icon text-danger"></i>
         </div></div>
     </div>
 </div>
 
-<h5 class="section-title"><i class="fas fa-shield-virus me-2"></i>File security pipeline</h5>
-<div class="row g-3 mb-4">
-    @foreach (var status in Enum.GetValues<FileSecurityStatus>())
-    {
-        <div class="col-6 col-md-4 col-xl">
-            <div class="card stat-card h-100"><div class="card-body">
-                <div class="stat-label"><span class="badge @AuditDisplay.StatusBadge(status) me-1"><i class="fas @AuditDisplay.StatusIcon(status)"></i></span>@status</div>
-                <div class="stat-value">@Model.StatusCount(status)</div>
-            </div></div>
-        </div>
-    }
-</div>
-<div class="row g-3 mb-4">
-    <div class="col-6 col-xl-3"><div class="card stat-card h-100"><div class="card-body">
-        <div class="stat-label">Failed sign-ins (7d)</div><div class="stat-value @(Model.FailedLogins7d > 0 ? "text-danger" : "")">@Model.FailedLogins7d</div></div></div></div>
-    <div class="col-6 col-xl-3"><div class="card stat-card h-100"><div class="card-body">
-        <div class="stat-label">Blocked downloads (7d)</div><div class="stat-value @(Model.BlockedDownloads7d > 0 ? "text-warning" : "")">@Model.BlockedDownloads7d</div><small class="text-muted">not approved / not owner</small></div></div></div>
-    <div class="col-6 col-xl-3"><div class="card stat-card h-100"><div class="card-body">
-        <div class="stat-label">Upload rejections (7d)</div><div class="stat-value @(Model.UploadRejections7d > 0 ? "text-warning" : "")">@Model.UploadRejections7d</div><small class="text-muted">upload + validation</small></div></div></div>
-    <div class="col-6 col-xl-3"><div class="card stat-card h-100"><div class="card-body">
-        <div class="stat-label">Scan failures (7d)</div><div class="stat-value @(Model.ScanFailures7d > 0 ? "text-danger" : "")">@Model.ScanFailures7d</div><small class="text-muted">errors + quarantines</small></div></div></div>
+<div class="row g-3 mb-3">
+    <div class="col-xl-8">
+        <div class="card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title mb-0"><i class="fas fa-shield-virus me-2"></i>File security pipeline</h5>
+                <span class="text-muted small">@total file(s)</span>
+            </div>
+            <div class="pipeline-bar mb-3" role="img" aria-label="Files by security state">
+                @foreach (var s in Enum.GetValues<FileSecurityStatus>().Where(s => Model.StatusCount(s) > 0))
+                {
+                    <span class="seg seg-@Css(s)" data-pct="@Pct(s)" title="@s: @Model.StatusCount(s)"></span>
+                }
+            </div>
+            <div class="pipeline-flow">
+                @{ Tile(FileSecurityStatus.Pending); }
+                <i class="fas fa-chevron-right flow-arrow"></i>
+                @{ Tile(FileSecurityStatus.Validating); }
+                <i class="fas fa-chevron-right flow-arrow"></i>
+                <div class="flow-outcomes">
+                    @{ Tile(FileSecurityStatus.Approved); Tile(FileSecurityStatus.Rejected); Tile(FileSecurityStatus.Quarantined); }
+                </div>
+            </div>
+            <p class="text-muted small mt-3 mb-0"><i class="fas fa-lock me-1"></i>Only <strong>Approved</strong> files in the approved bucket can be downloaded.</p>
+        </div></div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title mb-3"><i class="fas fa-heart-pulse me-2"></i>Controls</h5>
+            <ul class="posture list-unstyled mb-0">
+                <li>
+                    <i class="fas fa-link posture-icon @(chain is null ? "text-muted" : chain.Succeeded ? "text-success" : "text-danger")"></i>
+                    <div class="flex-grow-1">
+                        <div class="posture-label">Audit chain</div>
+                        @if (chain is null)
+                        {
+                            <span class="text-muted">Not verified yet</span>
+                        }
+                        else
+                        {
+                            <span class="@(chain.Succeeded ? "text-success" : "text-danger") fw-semibold">@(chain.Succeeded ? "Intact" : "Broken")</span>
+                            <span class="text-muted small">· @FormatHelpers.Ago(chain.TimestampUtc, Model.NowUtc)</span>
+                        }
+                    </div>
+                </li>
+                <li>
+                    <i class="fas fa-magnifying-glass posture-icon text-info"></i>
+                    <div class="flex-grow-1">
+                        <div class="posture-label">Scanners <span class="text-muted">· fail-closed</span></div>
+                        @foreach (var name in Model.Scanners)
+                        {
+                            <span class="badge bg-secondary me-1">@name</span>
+                        }
+                    </div>
+                </li>
+                <li>
+                    <i class="fas fa-gears posture-icon @(Model.WorkerEnabled ? "text-success" : "text-warning")"></i>
+                    <div class="flex-grow-1">
+                        <div class="posture-label">Validation worker</div>
+                        <span>@(Model.WorkerEnabled ? "Running in this instance" : "Disabled on this instance")</span>
+                    </div>
+                </li>
+            </ul>
+            <div class="row g-2 mt-1 text-center">
+                <div class="col-4"><div class="mini-stat"><div class="mini-value @(Model.BlockedDownloads7d > 0 ? "text-warning" : "")">@Model.BlockedDownloads7d</div><div class="mini-label">blocked downloads</div></div></div>
+                <div class="col-4"><div class="mini-stat"><div class="mini-value @(Model.UploadRejections7d > 0 ? "text-warning" : "")">@Model.UploadRejections7d</div><div class="mini-label">rejected uploads</div></div></div>
+                <div class="col-4"><div class="mini-stat"><div class="mini-value @(Model.ScanFailures7d > 0 ? "text-danger" : "")">@Model.ScanFailures7d</div><div class="mini-label">scan failures</div></div></div>
+            </div>
+            <div class="text-muted small text-end mt-1">last 7 days</div>
+        </div></div>
+    </div>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-lg-8">
+<div class="row g-3 mb-3">
+    <div class="col-xl-8">
         <div class="card h-100"><div class="card-body">
             <h5 class="card-title">Activity – last 7 days</h5>
             <div class="chart-box"><canvas id="activityChart" data-days="@System.Text.Json.JsonSerializer.Serialize(Model.Last7Days, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))"></canvas></div>
         </div></div>
     </div>
-    <div class="col-lg-4">
+    <div class="col-xl-4">
         <div class="card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h5 class="card-title mb-0">Recent security events</h5>
-                <a asp-action="Integrity" class="btn btn-outline-info btn-sm"><i class="fas fa-link me-1"></i>Verify chain</a>
+                <a asp-action="Audit" asp-route-succeeded="false" class="small text-nowrap">View all</a>
             </div>
             @if (!Model.RecentSecurityEvents.Any())
             {
@@ -77,8 +160,8 @@
                 <ul class="list-group list-group-flush list-dark">
                     @foreach (var e in Model.RecentSecurityEvents)
                     {
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between"><partial name="_AuditRow" model="e" /><span class="text-muted small text-nowrap">@e.TimestampUtc.ToString("MMM dd HH:mm")</span></div>
+                        <li class="list-group-item px-0">
+                            <div class="d-flex flex-wrap justify-content-between gap-1"><partial name="_AuditRow" model="e" /><span class="text-muted small text-nowrap">@FormatHelpers.Ago(e.TimestampUtc, Model.NowUtc)</span></div>
                             <small class="text-muted text-truncate d-block">@e.UserEmail · @e.Target</small>
                         </li>
                     }
@@ -89,11 +172,11 @@
 </div>
 
 <div class="row g-3">
-    <div class="col-lg-7">
+    <div class="col-xl-7">
         <div class="card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="card-title mb-0">Recent audit events</h5>
-                <a asp-action="Audit" class="btn btn-outline-info btn-sm">Full audit log</a>
+                <h5 class="card-title mb-0">Recent audit events <span class="text-muted small fw-normal">· @Model.Events24h in 24h</span></h5>
+                <a asp-action="Audit" class="btn btn-outline-info btn-sm text-nowrap">Full audit log</a>
             </div>
             <div class="table-responsive">
                 <table class="table table-dark table-sm mb-0">
@@ -112,11 +195,11 @@
             </div>
         </div></div>
     </div>
-    <div class="col-lg-5">
+    <div class="col-xl-5">
         <div class="card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h5 class="card-title mb-0">Latest uploads</h5>
-                <a asp-controller="File" asp-action="List" asp-route-all="true" class="btn btn-outline-primary btn-sm">All files</a>
+                <a asp-controller="File" asp-action="List" asp-route-all="true" class="btn btn-outline-primary btn-sm text-nowrap">All files</a>
             </div>
             @if (!Model.RecentFiles.Any())
             {
@@ -127,9 +210,9 @@
                 <ul class="list-group list-group-flush list-dark">
                     @foreach (var f in Model.RecentFiles)
                     {
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between"><a asp-controller="File" asp-action="Details" asp-route-id="@f.Id" class="text-truncate me-2">@f.FileName</a><span class="text-muted small text-nowrap">@FormatHelpers.Bytes(f.SizeBytes)</span></div>
-                            <small class="text-muted">@f.OwnerEmail · @f.UploadedAtUtc.ToString("MMM dd HH:mm")</small> <span class="badge @AuditDisplay.StatusBadge(f.Status)">@f.Status</span>
+                        <li class="list-group-item px-0">
+                            <div class="d-flex justify-content-between"><a asp-controller="File" asp-action="Details" asp-route-id="@f.Id" class="text-truncate me-2">@f.FileName</a><span class="badge @AuditDisplay.StatusBadge(f.Status)">@f.Status</span></div>
+                            <small class="text-muted">@f.OwnerEmail · @FormatHelpers.Bytes(f.SizeBytes) · @FormatHelpers.Ago(f.UploadedAtUtc, Model.NowUtc)</small>
                         </li>
                     }
                 </ul>

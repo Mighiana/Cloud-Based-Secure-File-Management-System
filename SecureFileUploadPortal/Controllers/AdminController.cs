@@ -22,6 +22,7 @@ public class AdminController(
     IOptions<UploadOptions> uploadOptions,
     IOptions<CloudTrailOptions> cloudTrailOptions,
     IOptions<ValidationOptions> validationOptions,
+    IEnumerable<IFileSecurityScanner> scanners,
     ValidationSignal validationSignal,
     IWebHostEnvironment env,
     TimeProvider clock,
@@ -59,7 +60,7 @@ public class AdminController(
                 Count(d, AuditActions.FileUploadReceived, true),
                 Count(d, AuditActions.FileDownloaded, true),
                 Count(d, AuditActions.LoginSucceeded, true),
-                Count(d, AuditActions.LoginFailed, false) + Count(d, AuditActions.LoginLockedOut, false))).ToList(),
+                weekEvents.Count(e => e.TimestampUtc.Date == d && !e.Succeeded))).ToList(),
             RecentEvents = await db.AuditLogs.AsNoTracking().OrderByDescending(a => a.TimestampUtc).Take(8).ToListAsync(ct),
             RecentFiles = await db.Files.AsNoTracking().OrderByDescending(f => f.UploadedAtUtc).Take(5)
                 .Select(f => new FileRow(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.UploadedAtUtc, f.Owner.Email, f.Status))
@@ -71,7 +72,15 @@ public class AdminController(
             UploadRejections7d = Since((a, _) => a is AuditActions.FileUploadRejected or AuditActions.FileValidationRejected),
             ScanFailures7d = Since((a, _) => a is AuditActions.FileScanFailed or AuditActions.FileQuarantined),
             RecentSecurityEvents = await db.AuditLogs.AsNoTracking().Where(a => !a.Succeeded)
-                .OrderByDescending(a => a.Id).Take(8).ToListAsync(ct),
+                .OrderByDescending(a => a.Id).Take(6).ToListAsync(ct),
+            OldestQueuedUtc = await db.Files
+                .Where(f => f.Status == FileSecurityStatus.Pending || f.Status == FileSecurityStatus.Validating)
+                .MinAsync(f => (DateTime?)f.UploadedAtUtc, ct),
+            LastChainCheck = await db.AuditLogs.AsNoTracking().Where(a => a.Action == AuditActions.AuditChainVerified)
+                .OrderByDescending(a => a.Id).FirstOrDefaultAsync(ct),
+            Scanners = scanners.Select(s => s.Name).ToList(),
+            WorkerEnabled = validationOptions.Value.RunWorker,
+            NowUtc = now,
         };
         return View(model);
     }

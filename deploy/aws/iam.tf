@@ -2,8 +2,8 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
-  quarantine_arn = aws_s3_bucket.files["quarantine"].arn
-  approved_arn   = aws_s3_bucket.files["approved"].arn
+  quarantine_arn = "arn:${data.aws_partition.current.partition}:s3:::${aws_s3_bucket.files["quarantine"].bucket}"
+  approved_arn   = "arn:${data.aws_partition.current.partition}:s3:::${aws_s3_bucket.files["approved"].bucket}"
   kms_statements = var.kms_key_arn == null ? [] : [{
     Sid      = "UseFileEncryptionKey"
     Effect   = "Allow"
@@ -40,7 +40,8 @@ locals {
     },
   ], local.kms_statements)
 
-  # Validation worker: read from quarantine, copy approved objects across, remove the quarantine copy.
+  # Validation worker (runs inside the web process, so it shares the web role): read from quarantine,
+  # copy approved objects across, remove the quarantine copy.
   validator_statements = concat([
     {
       Sid      = "ReadAndRemoveQuarantine"
@@ -78,21 +79,8 @@ resource "aws_iam_role_policy" "web" {
   policy = jsonencode({ Version = "2012-10-17", Statement = local.web_statements })
 }
 
-resource "aws_iam_role_policy" "web_validator" {
-  count  = var.validator_in_web_process ? 1 : 0
-  name   = "file-portal-validator"
+resource "aws_iam_role_policy" "web_validation_worker" {
+  name   = "file-portal-validation-worker"
   role   = aws_iam_role.web.id
-  policy = jsonencode({ Version = "2012-10-17", Statement = local.validator_statements })
-}
-
-resource "aws_iam_role" "validator" {
-  name               = "${var.name_prefix}-validator"
-  description        = "Secure file portal validation worker (when run as its own process)"
-  assume_role_policy = local.app_assume_role
-}
-
-resource "aws_iam_role_policy" "validator" {
-  name   = "file-portal-validator"
-  role   = aws_iam_role.validator.id
   policy = jsonencode({ Version = "2012-10-17", Statement = local.validator_statements })
 }

@@ -300,6 +300,39 @@ public class IntegrationTests(PortalFactory factory) : IClassFixture<PortalFacto
         Assert.StartsWith("https://s3.test/approved/", allowed.Headers.Location!.ToString());
     }
 
+    [Fact]
+    public async Task File_list_can_be_filtered_by_security_state()
+    {
+        const string email = "filter@test.local";
+        await EnsureUserAsync(email);
+        var client = await SignedInAsync(email, "user-password-123");
+        await UploadAsync(client, "keep-me.pdf", TestFiles.Pdf.Concat("keep"u8.ToArray()).ToArray());
+        await UploadAsync(client, "held-back.pdf", TestFiles.Pdf.Concat("held"u8.ToArray()).ToArray());
+        await factory.WithDbAsync(async db =>
+        {
+            var f = await db.Files.SingleAsync(x => x.OriginalFileName == "held-back.pdf");
+            f.Status = FileSecurityStatus.Quarantined;
+            return await db.SaveChangesAsync();
+        });
+
+        var html = await client.GetStringAsync("/File/List?status=Quarantined");
+
+        Assert.Contains("held-back.pdf", html);
+        Assert.DoesNotContain("keep-me.pdf", html);
+    }
+
+    [Fact]
+    public async Task Admin_dashboard_shows_pipeline_and_controls_from_live_data()
+    {
+        var admin = await SignedInAsync(PortalFactory.AdminEmail, PortalFactory.AdminPassword);
+        var html = await admin.GetStringAsync("/Admin/Index");
+
+        Assert.Contains("Validation queue", html);
+        Assert.Contains("basic-validation", html);
+        foreach (var status in Enum.GetValues<FileSecurityStatus>())
+            Assert.Contains($"status={status}", html);
+    }
+
     [Theory]
     [InlineData(FileSecurityStatus.Pending)]
     [InlineData(FileSecurityStatus.Validating)]

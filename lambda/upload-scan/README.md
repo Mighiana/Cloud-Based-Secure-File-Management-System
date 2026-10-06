@@ -81,5 +81,5 @@ python -m pytest -q tests
 ```
 
 The tests use [moto](https://github.com/getmoto/moto) for S3/SNS/SQS, so no AWS account is
-needed (29 tests). `make check` / CI also run `terraform fmt`, `validate`, `test`, TFLint and
+needed. `make check` / CI also run `terraform fmt`, `validate`, `test`, TFLint and
 Checkov on `deploy/aws`.

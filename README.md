@@ -41,7 +41,7 @@ end over S3 with these goals:
 - **Nothing uploaded is trusted or served until it is validated.** Unvalidated, rejected and
   quarantined files cannot be downloaded, enforced on the server and by bucket separation.
 - **Least privilege** for users (own files only, admin role for management) and for cloud
-  identities (separate IAM roles for web app, validator and Lambda).
+  identities (scoped IAM policies; the Lambda has its own role with no access to approved files).
 - **Accountability:** an application audit trail of who did what, which can be checked for
   edits or deletions, alongside AWS CloudTrail.
 - **Reproducible and checkable** without an AWS account: Docker demo, offline Terraform tests.
@@ -67,7 +67,7 @@ administrators who manage accounts, review security events and re-scan quarantin
 | **CloudTrail viewer** | Lists and decompresses `.json.gz` logs from a configured CloudTrail bucket (optional) |
 | **Reports** | CSV exports: file inventory, audit trail, CloudTrail index (formula-injection safe) |
 | **Upload-scan Lambda** | S3-triggered Python function on the quarantine bucket: hygiene checks, `scan-status` tags, SNS alerts, duplicate-event suppression, DLQ ([details](#2025-upload-alerts-aws-lambda--sns)) |
-| **Infrastructure** | Terraform root module with `terraform test`, TFLint, Checkov; Docker Compose with SQL Server, LocalStack (S3, SNS, SQS, Lambda) and ClamAV |
+| **Infrastructure** | Terraform root module with `terraform test`, TFLint, Checkov; Docker Compose with SQL Server, LocalStack (S3, SNS, Lambda, SQS for the Lambda dead-letter queue) and ClamAV |
 
 ## Screenshots
 
@@ -114,6 +114,7 @@ flowchart LR
     L -->|tag scan-status| S3
     L -->|Scan Complete / Scan Failed| SNS[[SNS FileUploadAlerts]]
     SNS -->|e-mail| SUB([Subscribers])
+    L -.->|failed after retries| DLQ[(SQS dead-letter queue)]
 ```
 
 - Checks each new object: not empty, within the size limit, allowed extension, and that the
@@ -122,7 +123,7 @@ flowchart LR
   publishes the same style of e-mail as 2025 to SNS. A redelivered S3 event for an object
   version that was already scanned is skipped (no duplicate alert); failures are retried and
   then sent to an SQS dead-letter queue.
-- Verified with 29 pytest/moto tests and in the Docker demo, where LocalStack runs the same
+- Verified with pytest/moto tests and in the Docker demo, where LocalStack runs the same
   handler on the quarantine bucket. It has **not been deployed to a real AWS account** from
   this repo.
 
@@ -144,7 +145,12 @@ flowchart LR
     W -->|state + audit| SQL
     APP -->|pre-signed GET, Approved only| A
     Q -.->|S3 event| L[upload-scan Lambda] -.-> SNS[[SNS alerts]]
+    L -.->|failed events| DLQ[(SQS DLQ)]
 ```
+
+Retries of the validation worker are scheduled in SQL Server (`ValidationAttempts`,
+`NextAttemptAtUtc`); SQS is used only as the Lambda's dead-letter queue (and as the alert inbox
+in LocalStack).
 
 Component, state, sequence and data-model diagrams, the audit-event list, IAM design and
 the configuration reference are in **[docs/architecture.md](docs/architecture.md)**. The threat
@@ -160,7 +166,7 @@ model (threat → control → gap) is in **[docs/threat-model.md](docs/threat-mo
 | Infrastructure | Terraform 1.9 (`terraform test` with mocked provider), TFLint, Checkov, ShellCheck |
 | Frontend | Razor views, Bootstrap 5, Font Awesome, Chart.js - all served locally under a strict CSP |
 | Tests | xUnit + `WebApplicationFactory`, EF Core InMemory; pytest + moto |
-| Local demo | Docker Compose: SQL Server 2022, LocalStack 3.8 (S3, SNS, SQS, Lambda), ClamAV, app |
+| Local demo | Docker Compose: SQL Server 2022, LocalStack 3.8 (S3, SNS, Lambda, SQS as DLQ / alert inbox), ClamAV, app |
 | CI | GitHub Actions: build (warnings as errors), tests against a real clamd, migration drift check, Lambda tests, Terraform fmt/validate/test, TFLint, Checkov, ShellCheck |
 
 ```
@@ -280,8 +286,11 @@ dotnet run
 
 [`deploy/aws`](deploy/aws) is a Terraform root module for the AWS side: the quarantine,
 approved and access-log buckets (private, versioned, encrypted, TLS-only, lifecycle rules),
-separate least-privilege IAM roles for the web app and the validator, and the upload-scan
-Lambda with its SNS topic, SQS dead-letter queue and log group. SSE-S3 is the default to avoid
+scoped least-privilege IAM policies, and the upload-scan Lambda with its SNS topic, SQS
+dead-letter queue and log group. There are two roles: the web app role, which also carries the
+validation worker's policy (read/delete quarantine, write approved) because the worker runs inside
+the web process, and a Lambda role limited to the quarantine bucket, its SNS topic, DLQ and logs.
+Server access logs for both file buckets go to a dedicated, private access-log bucket. SSE-S3 is the default to avoid
 KMS cost; set `kms_key_arn` for SSE-KMS. Details: [docs/architecture.md](docs/architecture.md#infrastructure-as-code-deployaws).
 
 All checks run offline, without AWS credentials:
@@ -293,8 +302,9 @@ make check       # fmt, validate, terraform test, TFLint, Checkov, ShellCheck, .
 ```
 
 `terraform test` uses a mocked AWS provider and asserts, among others, that every bucket
-blocks public access and denies non-TLS requests, that no IAM statement grants `*` actions or
-`*` resources, and that the web role cannot write to the approved bucket. Checkov passes with
+blocks public access and denies non-TLS requests, that no IAM statement grants `*` or `service:*`
+actions or `Resource: "*"` (object access is scoped to one bucket's `/*`), and that the Lambda
+role has no access to the approved bucket. Checkov passes with
 12 documented, inline skips (e.g. cross-region replication and SSE-KMS-by-default are cost
 decisions). This Terraform has been validated and tested offline only; **it has not been
 applied to a real AWS account.**
@@ -330,7 +340,7 @@ make check                       # everything below, offline
 dotnet test SecureFileUploadPortal.sln
 ```
 
-- **99 .NET tests.** Unit tests: upload validator, file signatures (PDF/PNG/JPEG/ZIP/text,
+- **.NET (xUnit).** Unit tests: upload validator, file signatures (PDF/PNG/JPEG/ZIP/text,
   disguised executables, binary text), ownership policy, CSV escaping, password hashing,
   lockout, security stamps, audit-chain verification (edited, deleted and legacy entries),
   clamd protocol parsing. Pipeline tests: approval and promotion, hash mismatch → rejected,
@@ -341,18 +351,22 @@ dotnet test SecureFileUploadPortal.sln
   every non-approved state, ownership, CSP on every page, login rate limiting.
 - **EICAR against a real ClamAV** runs when `CLAMAV_HOST` is set (CI starts a clamd service
   container).
-- **29 Lambda tests** (pytest + moto): checks, tagging, SNS, URL-encoded keys, deleted objects,
+- **Lambda (pytest + moto)**: checks, tagging, SNS, URL-encoded keys, deleted objects,
   duplicate events, new versions, error tagging and retries.
 - **Terraform:** 6 `terraform test` runs, TFLint, Checkov; **ShellCheck** on the shell scripts.
 
 ## Technical decisions
 
-- **Two buckets instead of a prefix.** IAM and bucket policies can then separate "can write
-  uploads" from "can serve files", and the download gate is enforced twice (database state and
-  bucket).
+- **Two buckets instead of a prefix.** The download gate is enforced twice: by database state
+  and by bucket, because URLs are only ever signed for the approved bucket. The Lambda's role
+  can only reach the quarantine bucket.
+- **Retries in SQL Server, not SQS.** Attempt count and next-attempt time live on the
+  `FileRecords` row, next to the state and its audit entries, so one transaction moves a file
+  between states. SQS is only the Lambda's dead-letter queue.
 - **Validation in the app's worker, not in Lambda.** It keeps the state machine, retries and
   audit in one place next to the database and works identically in Docker; the Lambda stays a
-  simple, independent alerting path.
+  simple, independent alerting path. Trade-off: the worker runs in the web process and shares
+  its IAM role, so that role can also write to the approved bucket.
 - **Scanner interface.** `IFileSecurityScanner` makes the basic checks mandatory and ClamAV
   optional, and lets a commercial scanner be added without touching the pipeline.
 - **Fail closed** rather than fail open when a scanner is down, accepting that a long outage
@@ -400,6 +414,7 @@ quarantined; scanner outage → retries; Lambda tags and SNS alert in LocalStack
 - file sharing between users, folders
 - the Terraform and Lambda have **not been deployed to a real AWS account** from this repo
 - Data Protection keys are stored unencrypted on the configured path
+- a separate validation-worker process with its own IAM role (the worker shares the web app's role)
 
 **Optional production hardening** (not used here, some paid): GuardDuty Malware Protection for
 S3, Macie, WAF, Security Hub, KMS-encrypted Data Protection keys, S3 Object Lock for audit

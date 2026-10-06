@@ -22,6 +22,7 @@ public class FileListViewModel
     public IReadOnlyList<FileRow> Files { get; init; } = [];
     public bool ShowAllUsers { get; init; }
     public bool CanSeeAllUsers { get; init; }
+    public FileSecurityStatus? StatusFilter { get; init; }
     public bool HasFilesInProgress => Files.Any(f => f.Status is FileSecurityStatus.Pending or FileSecurityStatus.Validating);
 }
 
@@ -49,7 +50,7 @@ public class UserDashboardViewModel
     public IReadOnlyList<AuditLog> RecentActivity { get; init; } = [];
 }
 
-public record DailyActivity(string Label, int Uploads, int Downloads, int Logins, int FailedLogins);
+public record DailyActivity(string Label, int Uploads, int Downloads, int Logins, int FailedActions);
 
 
 public class AdminDashboardViewModel
@@ -70,6 +71,12 @@ public class AdminDashboardViewModel
     public int ScanFailures7d { get; init; }
     public IReadOnlyList<AuditLog> RecentSecurityEvents { get; init; } = [];
     public int StatusCount(FileSecurityStatus s) => FilesByStatus.TryGetValue(s, out var n) ? n : 0;
+    public int ValidationQueue => StatusCount(FileSecurityStatus.Pending) + StatusCount(FileSecurityStatus.Validating);
+    public DateTime? OldestQueuedUtc { get; init; }
+    public AuditLog? LastChainCheck { get; init; }
+    public IReadOnlyList<string> Scanners { get; init; } = [];
+    public bool WorkerEnabled { get; init; }
+    public DateTime NowUtc { get; init; }
 }
 
 public class IntegrityViewModel

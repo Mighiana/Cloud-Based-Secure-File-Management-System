@@ -97,7 +97,7 @@ public class FileController(
     }
 
     [HttpGet]
-    public async Task<IActionResult> List(bool all = false, CancellationToken ct = default)
+    public async Task<IActionResult> List(bool all = false, FileSecurityStatus? status = null, CancellationToken ct = default)
     {
         var isAdmin = User.IsInRole(Roles.Admin);
         var showAll = all && isAdmin;
@@ -105,12 +105,13 @@ public class FileController(
 
         var query = db.Files.AsNoTracking();
         if (!showAll) query = query.Where(f => f.OwnerId == userId);
+        if (status is not null) query = query.Where(f => f.Status == status);
 
         var files = await query.OrderByDescending(f => f.UploadedAtUtc)
             .Select(f => new FileRow(f.Id, f.OriginalFileName, f.ContentType, f.SizeBytes, f.UploadedAtUtc, f.Owner.Email, f.Status))
             .ToListAsync(ct);
 
-        return View(new FileListViewModel { Files = files, ShowAllUsers = showAll, CanSeeAllUsers = isAdmin });
+        return View(new FileListViewModel { Files = files, ShowAllUsers = showAll, CanSeeAllUsers = isAdmin, StatusFilter = status });
     }
 
     [HttpGet]

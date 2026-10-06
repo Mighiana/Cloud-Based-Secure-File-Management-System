@@ -71,25 +71,21 @@ run "iam_policies_are_least_privilege" {
   command = apply
 
   assert {
-    condition = alltrue(flatten([for p in [aws_iam_role_policy.web.policy, aws_iam_role_policy.validator.policy, aws_iam_role_policy.function[0].policy] : [
+    condition = alltrue(flatten([for p in [aws_iam_role_policy.web.policy, aws_iam_role_policy.web_validation_worker.policy, aws_iam_role_policy.function[0].policy] : [
       for s in jsondecode(p).Statement : [
         for a in flatten([s.Action]) : a != "*" && !endswith(a, ":*")
     ]]]))
     error_message = "No IAM statement may grant '*' or 'service:*' actions."
   }
   assert {
-    condition = alltrue(flatten([for p in [aws_iam_role_policy.web.policy, aws_iam_role_policy.validator.policy, aws_iam_role_policy.function[0].policy] : [
+    condition = alltrue(flatten([for p in [aws_iam_role_policy.web.policy, aws_iam_role_policy.web_validation_worker.policy, aws_iam_role_policy.function[0].policy] : [
     for s in jsondecode(p).Statement : s.Resource != "*"]]))
     error_message = "No IAM statement may target every resource."
   }
   assert {
-    condition = !anytrue([for s in jsondecode(aws_iam_role_policy.web.policy).Statement :
-    s.Sid == "ServeAndDeleteApprovedFiles" && contains(flatten([s.Action]), "s3:PutObject")])
-    error_message = "The web role must not write directly to the approved bucket."
-  }
-  assert {
-    condition     = length(aws_iam_role_policy.web_validator) == 1
-    error_message = "By default the worker runs in the web process and needs the validator policy."
+    condition = !anytrue(flatten([for s in jsondecode(aws_iam_role_policy.function[0].policy).Statement :
+    [for r in flatten([s.Resource]) : strcontains(r, aws_s3_bucket.files["approved"].bucket)]]))
+    error_message = "The Lambda role must have no access to the approved bucket."
   }
 }
 
@@ -111,21 +107,16 @@ run "optional_sse_kms" {
   }
 }
 
-run "lambda_can_be_disabled_and_worker_split_out" {
+run "lambda_can_be_disabled" {
   command = apply
 
   variables {
     enable_upload_scan_lambda = false
-    validator_in_web_process  = false
   }
 
   assert {
     condition     = length(aws_lambda_function.scan) == 0 && length(aws_s3_bucket_notification.quarantine) == 0
     error_message = "Disabling the Lambda must remove the function and its trigger."
-  }
-  assert {
-    condition     = length(aws_iam_role_policy.web_validator) == 0
-    error_message = "A separate worker means the web role loses the validator policy."
   }
 }
 

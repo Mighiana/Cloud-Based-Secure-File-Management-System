@@ -71,7 +71,7 @@
     <text x="1010" y="163" text-anchor="middle" font-weight="700">upload-scan Lambda</text>
     <text x="1010" y="185" text-anchor="middle" fill="#9aa7b4" font-size="12">2026 reconstruction of</text>
     <text x="1010" y="203" text-anchor="middle" fill="#9aa7b4" font-size="12">the 2025 console build</text>
-    <text x="1010" y="223" text-anchor="middle" fill="#9aa7b4" font-size="12">tags · idempotent · DLQ</text>
+    <text x="1010" y="223" text-anchor="middle" fill="#9aa7b4" font-size="12">tags · idempotent · SQS DLQ</text>
     <rect x="1170" y="145" width="190" height="80" rx="14" fill="#161b22" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="6 4"/>
     <text x="1265" y="178" text-anchor="middle" font-weight="700">SNS FileUploadAlerts</text>
     <text x="1265" y="200" text-anchor="middle" fill="#9aa7b4" font-size="12">e-mail alerts</text>
@@ -85,8 +85,8 @@
     <rect x="1170" y="300" width="190" height="200" rx="14" fill="#161b22" stroke="#00c3ff" stroke-width="1.5"/>
     <text x="1265" y="333" text-anchor="middle" font-weight="700">Terraform</text>
     <text x="1185" y="360" fill="#c9d1d9" font-size="12.5">buckets + access logs</text>
-    <text x="1185" y="382" fill="#c9d1d9" font-size="12.5">web / validator / Lambda</text>
-    <text x="1185" y="400" fill="#c9d1d9" font-size="12.5">least-privilege IAM roles</text>
+    <text x="1185" y="382" fill="#c9d1d9" font-size="12.5">web-app + Lambda roles</text>
+    <text x="1185" y="400" fill="#c9d1d9" font-size="12.5">scoped IAM policies</text>
     <text x="1185" y="422" fill="#c9d1d9" font-size="12.5">terraform test (mocked)</text>
     <text x="1185" y="444" fill="#c9d1d9" font-size="12.5">TFLint · Checkov</text>
     <text x="1185" y="470" fill="#9aa7b4" font-size="12">no AWS credentials</text>

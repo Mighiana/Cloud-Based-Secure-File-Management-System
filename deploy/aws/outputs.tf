@@ -17,10 +17,6 @@ output "web_role_arn" {
   value = aws_iam_role.web.arn
 }
 
-output "validator_role_arn" {
-  value = aws_iam_role.validator.arn
-}
-
 output "sns_topic_arn" {
   value = aws_sns_topic.alerts.arn
 }
