@@ -11,7 +11,8 @@ their own files, and every security-relevant action is written to a persistent
 
 > **Project history.** This started as coursework for *Cloud Services and Security* at
 > Óbuda University (Nov 2025, first pushed Dec 2025). That version did the S3 work (encrypted
-> uploads, pre-signed downloads, CloudTrail log viewer) but had no database, no working
+> uploads, pre-signed downloads, CloudTrail log viewer), plus an S3-triggered Lambda + SNS
+> upload-alert pipeline configured in the AWS console, but had no database, no working
 > login and several simulated screens. In October 2026 it was refactored: the SQL Server
 > layer, authentication, roles, ownership checks, audit log, tests and Docker demo described
 > below were **added in that refactor**. See [Project history](#project-history).
@@ -67,6 +68,20 @@ accounts and a local S3 emulator. CloudTrail entries in the demo are **synthetic
 
 Screenshots of the original 2025 coursework UI are kept in
 [`docs/screenshots/original-2025`](docs/screenshots/original-2025) for reference.
+
+### 2025 upload alerts (AWS Lambda + SNS)
+
+In the original coursework deployment (AWS `eu-north-1`, Nov 2025), uploads to the files bucket
+triggered a **Lambda function** that ran a basic post-upload check - the coursework report
+describes it as a *simulated* scan, not a malware engine - and published the result to an
+**SNS topic** (`FileUploadAlerts`) that e-mailed subscribers "FILE SCAN SUCCESSFUL" or
+"FILE SCAN FAILED" with the file name, bucket, size, type and timestamp:
+
+![SNS e-mails from the 2025 Lambda scan](docs/screenshots/original-2025/sns-scan-alerts.png)
+
+The function was written and configured in the AWS console; **its source code is not in this
+repository**, and the web application does not call or depend on it. Re-creating it as code
+is listed under [limitations](#status-and-limitations).
 
 ## Architecture
 
@@ -284,9 +299,11 @@ Docker demo against SQL Server and LocalStack S3.
 **Not implemented** (some appear in the original coursework report as design ideas):
 
 - multi-factor authentication
-- malware/content scanning (e.g. Macie or Lambda-based)
+- malware/content scanning (the 2025 Lambda check was a simulated scan, and its code is not
+  in this repo)
 - Glacier archival / lifecycle management from the app (can be set as an S3 lifecycle rule)
-- SNS/e-mail alerts and CloudWatch dashboards
+- SNS/e-mail alerts from the application itself, and CloudWatch dashboards (SNS e-mails existed
+  only via the 2025 console-built Lambda - see [2025 upload alerts](#2025-upload-alerts-aws-lambda--sns))
 - self-service registration and password reset
 - parsing or correlating CloudTrail events (the viewer shows raw JSON)
 - file sharing between users, versioning, folders
@@ -298,6 +315,6 @@ key encryption (e.g. `ProtectKeysWithCertificate` or AWS KMS) or a managed key s
 
 | When | What |
 |---|---|
-| Nov 2025 | Coursework for *Cloud Services and Security*, Óbuda University (report and presentation). AWS-side setup (S3, KMS, CloudTrail) was configured in the console. |
+| Nov 2025 | Coursework for *Cloud Services and Security*, Óbuda University (report and presentation). AWS-side setup was configured in the console: S3 buckets, KMS key, CloudTrail trail, and an S3-triggered Lambda (simulated scan) publishing to an SNS e-mail topic. The Lambda code was never committed. |
 | Dec 2025 | Code pushed: S3 upload/list/download/delete with SSE-KMS and pre-signed URLs, CloudTrail log viewer, CSV exports, admin UI. Several screens were placeholders. |
 | Oct 2026 | Refactor: SQL Server + EF Core, password hashing, roles, ownership checks, persistent audit log, user management, removal of simulated features, configuration/secrets cleanup, tests, CI and Docker demo. |

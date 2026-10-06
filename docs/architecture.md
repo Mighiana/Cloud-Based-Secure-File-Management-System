@@ -17,6 +17,19 @@ flowchart LR
     CT[(CloudTrail bucket)] -.->|read-only, admins| APP
 ```
 
+### Console-only in the 2025 deployment (not in this repo)
+
+```mermaid
+flowchart LR
+    S3[(Files bucket)] -->|ObjectCreated| L[AWS Lambda<br/>simulated scan]
+    L -->|scan result| SNS[[SNS topic<br/>FileUploadAlerts]]
+    SNS -->|e-mail| SUB([Subscribers])
+```
+
+The coursework deployment had an S3-triggered Lambda that performed a basic (simulated) check
+on each upload and sent "scan successful / failed" e-mails through SNS. It was built in the
+AWS console; its code is not in this repository and the application does not depend on it.
+
 ## Components
 
 ```mermaid
