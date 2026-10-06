@@ -14,8 +14,8 @@ their own files, and every security-relevant action is written to a persistent
 > uploads, pre-signed downloads, CloudTrail log viewer), plus an S3-triggered Lambda + SNS
 > upload-alert pipeline configured in the AWS console, but had no database, no working
 > login and several simulated screens. In October 2026 it was refactored: the SQL Server
-> layer, authentication, roles, ownership checks, audit log, tests and Docker demo described
-> below were **added in that refactor**. See [Project history](#project-history).
+> layer, authentication, roles, ownership checks, audit log, tests, Docker demo and the
+> Lambda/Terraform code described below were **added in that refactor**. See [Project history](#project-history).
 
 ---
 
@@ -51,6 +51,7 @@ administrators who manage accounts and review activity.
 | **User management** | Create users, promote/demote, activate/deactivate (cannot lock yourself out) |
 | **CloudTrail viewer** | Lists `.json.gz` log files in a configured CloudTrail bucket and shows them decompressed. Optional |
 | **Reports** | CSV exports: file inventory, audit trail, CloudTrail index (formula-injection safe) |
+| **Upload-scan Lambda** | Separate S3-triggered Python function (Terraform): size / extension / file-signature checks, `scan-status` object tags, SNS e-mail alerts. [Details](#2025-upload-alerts-aws-lambda--sns) |
 
 ## Screenshots
 
@@ -79,9 +80,35 @@ describes it as a *simulated* scan, not a malware engine - and published the res
 
 ![SNS e-mails from the 2025 Lambda scan](docs/screenshots/original-2025/sns-scan-alerts.png)
 
-The function was written and configured in the AWS console; **its source code is not in this
-repository**, and the web application does not call or depend on it. Re-creating it as code
-is listed under [limitations](#status-and-limitations).
+That function was written and configured in the AWS console and its original source was never
+committed. **[`lambda/upload-scan`](lambda/upload-scan) is a 2026 reconstruction of it as code**,
+deployable with the Terraform in [`deploy/aws/upload-scan`](deploy/aws/upload-scan):
+
+```mermaid
+flowchart LR
+    APP[Portal upload] --> S3[(Files bucket)]
+    S3 -->|s3:ObjectCreated:*| L[Lambda<br/>upload-scan]
+    L -->|read first 8 KB| S3
+    L -->|tag scan-status| S3
+    L -->|Scan Complete / Scan Failed| SNS[[SNS FileUploadAlerts]]
+    SNS -->|e-mail| SUB([Subscribers])
+```
+
+- Checks each new object: not empty, within the size limit, allowed extension, and that the
+  first bytes match the file type (`%PDF-`, PNG, JPEG, ZIP for `.docx`/`.xlsx`, no NUL bytes
+  in `.txt`) - so an executable renamed to `.pdf` is flagged.
+- Tags the object `scan-status=clean|rejected` with a `scan-reason`, and publishes the same
+  style of e-mail as 2025 to SNS.
+- Terraform creates the SNS topic (encrypted, e-mail subscriptions), the function with a
+  least-privilege role (`s3:GetObject`/`s3:PutObjectTagging` on the bucket, `sns:Publish` on
+  the topic, optional `kms:Decrypt`), its log group and the S3 trigger.
+- Verified with 25 pytest/moto tests and an end-to-end `terraform apply` against LocalStack
+  (upload → Lambda → tags + SNS message). It has **not been deployed to a real AWS account**
+  from this repo.
+
+These are file-hygiene checks, **not malware scanning**, and the portal does not yet read the
+scan tags (rejected files stay visible in the UI). See
+[`lambda/upload-scan/README.md`](lambda/upload-scan/README.md) for deployment.
 
 ## Architecture
 
@@ -132,10 +159,11 @@ configuration reference are in **[docs/architecture.md](docs/architecture.md)**.
 | Backend | C#, ASP.NET Core 8 MVC, EF Core 8 |
 | Database | SQL Server (code-first migrations) |
 | Storage | Amazon S3 via AWS SDK for .NET; KMS / AES256 server-side encryption |
+| Serverless | AWS Lambda (Python 3.12, boto3) + SNS, deployed with Terraform |
 | Frontend | Razor views, Bootstrap 5, Font Awesome, Chart.js |
-| Tests | xUnit, `WebApplicationFactory` integration tests, EF Core InMemory |
+| Tests | xUnit, `WebApplicationFactory` integration tests, EF Core InMemory; pytest + moto for the Lambda |
 | Local demo | Docker Compose: SQL Server 2022, LocalStack (S3), app container |
-| CI | GitHub Actions: build (warnings as errors), tests, migration drift check |
+| CI | GitHub Actions: build (warnings as errors), tests, migration drift check, Lambda tests, `terraform validate` |
 
 ```
 SecureFileUploadPortal/
@@ -147,6 +175,8 @@ SecureFileUploadPortal/
   Views/         Razor UI
 SecureFileUploadPortal.Tests/   unit + HTTP-level integration tests
 deploy/localstack/              bucket bootstrap + synthetic CloudTrail fixtures
+lambda/upload-scan/             S3-triggered upload-scan function (Python) + pytest suite
+deploy/aws/upload-scan/         Terraform: Lambda, IAM role, SNS topic, S3 trigger
 ```
 
 ## Security controls
@@ -260,6 +290,15 @@ database and a fake S3 store, and check over HTTP: anonymous redirects, antiforg
 login + audit, admin-only pages, upload validation and MIME handling, cross-user
 download/delete denial, and that deactivating a user invalidates their existing cookie.
 
+The upload-scan Lambda has its own 25 pytest tests (moto-mocked S3/SNS/SQS):
+
+```bash
+cd lambda/upload-scan && pip install -r requirements-dev.txt && python -m pytest -q tests
+```
+
+CI runs both suites, the EF Core migration drift check, and `terraform fmt`/`validate` for
+[`deploy/aws/upload-scan`](deploy/aws/upload-scan).
+
 ## Technical decisions
 
 - **Metadata in SQL, bytes in S3.** Ownership, original names and audit history need
@@ -299,11 +338,11 @@ Docker demo against SQL Server and LocalStack S3.
 **Not implemented** (some appear in the original coursework report as design ideas):
 
 - multi-factor authentication
-- malware/content scanning (the 2025 Lambda check was a simulated scan, and its code is not
-  in this repo)
+- malware scanning (the [upload-scan Lambda](#2025-upload-alerts-aws-lambda--sns) only checks
+  size, extension and file signature), and showing or enforcing its scan result in the portal
 - Glacier archival / lifecycle management from the app (can be set as an S3 lifecycle rule)
-- SNS/e-mail alerts from the application itself, and CloudWatch dashboards (SNS e-mails existed
-  only via the 2025 console-built Lambda - see [2025 upload alerts](#2025-upload-alerts-aws-lambda--sns))
+- CloudWatch dashboards and alarms (SNS e-mail alerts come from the
+  [upload-scan Lambda](#2025-upload-alerts-aws-lambda--sns), not from the web app)
 - self-service registration and password reset
 - parsing or correlating CloudTrail events (the viewer shows raw JSON)
 - file sharing between users, versioning, folders
@@ -317,4 +356,4 @@ key encryption (e.g. `ProtectKeysWithCertificate` or AWS KMS) or a managed key s
 |---|---|
 | Nov 2025 | Coursework for *Cloud Services and Security*, Óbuda University (report and presentation). AWS-side setup was configured in the console: S3 buckets, KMS key, CloudTrail trail, and an S3-triggered Lambda (simulated scan) publishing to an SNS e-mail topic. The Lambda code was never committed. |
 | Dec 2025 | Code pushed: S3 upload/list/download/delete with SSE-KMS and pre-signed URLs, CloudTrail log viewer, CSV exports, admin UI. Several screens were placeholders. |
-| Oct 2026 | Refactor: SQL Server + EF Core, password hashing, roles, ownership checks, persistent audit log, user management, removal of simulated features, configuration/secrets cleanup, tests, CI and Docker demo. |
+| Oct 2026 | Refactor: SQL Server + EF Core, password hashing, roles, ownership checks, persistent audit log, user management, removal of simulated features, configuration/secrets cleanup, tests, CI and Docker demo. The upload-scan Lambda was reconstructed as Python code with Terraform (not deployed to AWS from this repo). |

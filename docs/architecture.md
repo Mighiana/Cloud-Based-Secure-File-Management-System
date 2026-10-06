@@ -17,7 +17,7 @@ flowchart LR
     CT[(CloudTrail bucket)] -.->|read-only, admins| APP
 ```
 
-### Console-only in the 2025 deployment (not in this repo)
+### Upload-scan Lambda (2025 console build, reconstructed as code in 2026)
 
 ```mermaid
 flowchart LR
@@ -27,8 +27,11 @@ flowchart LR
 ```
 
 The coursework deployment had an S3-triggered Lambda that performed a basic (simulated) check
-on each upload and sent "scan successful / failed" e-mails through SNS. It was built in the
-AWS console; its code is not in this repository and the application does not depend on it.
+on each upload and sent "scan successful / failed" e-mails through SNS. It was built in the AWS
+console and its original code was never committed. [`lambda/upload-scan`](../lambda/upload-scan)
+is a 2026 reconstruction (size / extension / file-signature checks, `scan-status` object tags,
+SNS e-mail) with Terraform in [`deploy/aws/upload-scan`](../deploy/aws/upload-scan). It runs
+independently of the web application, which does not read the tags.
 
 ## Components
 

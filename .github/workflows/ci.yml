@@ -23,3 +23,30 @@ jobs:
         run: |
           dotnet tool install --global dotnet-ef --version 8.0.31
           dotnet ef migrations has-pending-model-changes --project SecureFileUploadPortal --no-build --configuration Release
+
+  upload-scan-lambda:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lambda/upload-scan
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q tests
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/aws/upload-scan
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
